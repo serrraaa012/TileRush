@@ -18,6 +18,7 @@ public class GameView extends View {
     private final Paint tilePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint linePaint = new Paint();
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint overlayPaint = new Paint();
     private final List<Tile> tiles = new ArrayList<>();
     private final Random random = new Random();
 
@@ -26,14 +27,16 @@ public class GameView extends View {
     private float spawnTimer = 0;
     private int score = 0;
     private boolean running = false;
+    private boolean gameOver = false;
+    private long gameOverTime = 0;
+    private Tile missedTile = null;
 
     public GameView(Context context) {
         super(context);
         linePaint.setColor(Color.LTGRAY);
         linePaint.setStrokeWidth(3f);
-        textPaint.setColor(Color.RED);
-        textPaint.setTextSize(90f);
         textPaint.setTextAlign(Paint.Align.CENTER);
+        overlayPaint.setColor(Color.argb(210, 255, 255, 255));
     }
 
     @Override
@@ -53,16 +56,44 @@ public class GameView extends View {
         running = false;
     }
 
+    private void restart() {
+        tiles.clear();
+        score = 0;
+        spawnTimer = 0;
+        gameOver = false;
+        missedTile = null;
+        lastTime = 0;
+        postInvalidateOnAnimation();
+    }
+
+    private void endGame(Tile missed) {
+        gameOver = true;
+        missedTile = missed;
+        gameOverTime = System.currentTimeMillis();
+    }
+
     private void update(float dt) {
-        // move tiles down and remove the ones that left the screen
+        // move tiles down
+        for (Tile t : tiles) {
+            t.y += speed * dt;
+        }
+
+        // game over if an untapped tile reaches the bottom
+        for (Tile t : tiles) {
+            if (!t.tapped && t.y + t.height >= getHeight()) {
+                endGame(t);
+                return;
+            }
+        }
+
+        // remove tapped tiles that left the screen
         Iterator<Tile> it = tiles.iterator();
         while (it.hasNext()) {
             Tile t = it.next();
-            t.y += speed * dt;
             if (t.y > getHeight()) it.remove();
         }
 
-        // spawn a new tile each time the previous row has moved one tile down
+        // spawn new tiles
         spawnTimer += dt;
         float interval = tileHeight / speed;
         while (spawnTimer >= interval) {
@@ -78,14 +109,16 @@ public class GameView extends View {
 
         long now = System.nanoTime();
         float dt = (lastTime == 0) ? 0f : (now - lastTime) / 1_000_000_000f;
-        if (dt > 0.05f) dt = 0.05f;   // avoids big jumps after lag
+        if (dt > 0.05f) dt = 0.05f;
         lastTime = now;
 
-        if (running && laneWidth > 0) update(dt);
+        if (running && !gameOver && laneWidth > 0) update(dt);
 
-        // tiles
+        // tiles (the missed one is shown in red)
         for (Tile t : tiles) {
-            tilePaint.setColor(t.tapped ? Color.LTGRAY : Color.BLACK);
+            if (t == missedTile) tilePaint.setColor(Color.RED);
+            else if (t.tapped) tilePaint.setColor(Color.LTGRAY);
+            else tilePaint.setColor(Color.BLACK);
             float left = t.lane * laneWidth;
             canvas.drawRect(left + 4, t.y + 4, left + laneWidth - 4, t.y + t.height - 4, tilePaint);
         }
@@ -96,28 +129,59 @@ public class GameView extends View {
         }
 
         // score
+        textPaint.setColor(Color.RED);
+        textPaint.setTextSize(90f);
         canvas.drawText(String.valueOf(score), getWidth() / 2f, 130f, textPaint);
 
-        if (running) postInvalidateOnAnimation();
+        // game over screen
+        if (gameOver) {
+            canvas.drawRect(0, 0, getWidth(), getHeight(), overlayPaint);
+            float cx = getWidth() / 2f;
+            float cy = getHeight() / 2f;
+            textPaint.setColor(Color.BLACK);
+            textPaint.setTextSize(110f);
+            canvas.drawText("Game Over", cx, cy - 80f, textPaint);
+            textPaint.setTextSize(80f);
+            canvas.drawText("Score: " + score, cx, cy + 40f, textPaint);
+            textPaint.setTextSize(55f);
+            canvas.drawText("Tap to restart", cx, cy + 160f, textPaint);
+        }
+
+        if (running && !gameOver) postInvalidateOnAnimation();
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
-        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-            int idx = e.getActionIndex();
-            float x = e.getX(idx);
-            float y = e.getY(idx);
-            int lane = Math.min(LANES - 1, Math.max(0, (int) (x / laneWidth)));
+        if (action != MotionEvent.ACTION_DOWN && action != MotionEvent.ACTION_POINTER_DOWN) {
+            return true;
+        }
 
-            for (Tile t : tiles) {
-                if (!t.tapped && t.lane == lane && y >= t.y && y <= t.y + t.height) {
+        // on the game over screen, a tap restarts (small delay avoids accidental taps)
+        if (gameOver) {
+            if (System.currentTimeMillis() - gameOverTime > 600) restart();
+            return true;
+        }
+
+        int idx = e.getActionIndex();
+        float x = e.getX(idx);
+        float y = e.getY(idx);
+        int lane = Math.min(LANES - 1, Math.max(0, (int) (x / laneWidth)));
+
+        boolean hit = false;
+        for (Tile t : tiles) {
+            if (t.lane == lane && y >= t.y && y <= t.y + t.height) {
+                hit = true;
+                if (!t.tapped) {
                     t.tapped = true;
                     score++;
-                    break;
                 }
+                break;
             }
         }
+
+        // tapping where there is no tile ends the game
+        if (!hit) endGame(null);
         return true;
     }
 }
