@@ -108,7 +108,12 @@ public class GameView extends View {
         gameOver = false;
         missedTile = null;
         lastTime = 0;
-        if (bgMusic != null && !bgMusic.isPlaying()) bgMusic.start();
+        try {
+            if (bgMusic != null) {
+                bgMusic.seekTo(0);
+                if (!bgMusic.isPlaying()) bgMusic.start();
+            }
+        } catch (Exception ignored) {}
         postInvalidateOnAnimation();
         if (listener != null) listener.onRestart();
     }
