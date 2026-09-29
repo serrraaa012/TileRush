@@ -41,7 +41,6 @@
 
 ## 🛠️ Tech Stack & Architecture
 
-```text
 TileRush/
 ├── app/src/main/
 │   ├── java/com/example/tilerush/
@@ -61,3 +60,31 @@ TileRush/
 │           ├── colors.xml
 │           └── strings.xml
 
+---
+
+## Core Technologies
+Language: Java 17
+Android Target SDK: API 34 (UpsideDownCake)
+Minimum SDK: API 26 (Android 8.0 Oreo)
+Graphics: Hardware-accelerated android.graphics.Canvas with custom Paint shaders
+Audio Pipelines: android.media.SoundPool (SFX) + android.media.MediaPlayer (BGM / OST)
+UI & Animation: Native Android View Hierarchy + ObjectAnimator + ValueAnimator
+
+---
+
+## 🚀 Getting Started
+
+**Prerequisites**
+Android Studio
+(Hedgehog, Ladybug, Meerkat or newer)
+JDK 17+
+Android device or emulator running Android 8.0 (API 26) or higher
+
+---
+
+## Installation & Run
+
+**Clone the repository:**
+bash
+git clone https://github.com/<your-username>/TileRush.git
+cd TileRush
