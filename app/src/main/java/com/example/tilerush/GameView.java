@@ -1,5 +1,8 @@
 package com.example.tilerush;
 
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
+import android.media.SoundPool;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -16,6 +19,9 @@ import java.util.List;
 import java.util.Random;
 
 public class GameView extends View {
+    private SoundPool soundPool;
+    private int tapSound;
+    private MediaPlayer bgMusic;
     private static final int LANES = 4;
     private static final int CYAN = Color.rgb(0, 225, 255);
     private static final int MAGENTA = Color.rgb(255, 70, 200);
@@ -40,14 +46,22 @@ public class GameView extends View {
     private long gameOverTime = 0;
     private Tile missedTile = null;
 
-    public GameView(Context context) {
+    public GameView(Context context, MediaPlayer bgMusic) {
         super(context);
+        this.bgMusic = bgMusic;
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(5f);
         linePaint.setColor(Color.argb(60, 130, 210, 255));
         linePaint.setStrokeWidth(3f);
         textPaint.setTextAlign(Paint.Align.CENTER);
         overlayPaint.setColor(Color.argb(215, 8, 6, 28));
+
+        AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+        soundPool = new SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build();
+        tapSound = soundPool.load(context, R.raw.tap, 1);
     }
 
     @Override
@@ -62,11 +76,19 @@ public class GameView extends View {
     public void resume() {
         running = true;
         lastTime = 0;
+        if (bgMusic != null && !bgMusic.isPlaying()) bgMusic.start();
         postInvalidateOnAnimation();
     }
 
     public void pause() {
         running = false;
+    }
+
+    public void release() {
+        if (soundPool != null) {
+            soundPool.release();
+            soundPool = null;
+        }
     }
 
     private void restart() {
@@ -76,6 +98,7 @@ public class GameView extends View {
         gameOver = false;
         missedTile = null;
         lastTime = 0;
+        if (bgMusic != null && !bgMusic.isPlaying()) bgMusic.start();
         postInvalidateOnAnimation();
     }
 
@@ -83,6 +106,7 @@ public class GameView extends View {
         gameOver = true;
         missedTile = missed;
         gameOverTime = System.currentTimeMillis();
+        if (bgMusic != null && bgMusic.isPlaying()) bgMusic.pause();
     }
 
     private void spawnTile() {
@@ -253,6 +277,7 @@ public class GameView extends View {
                     if (!t.tapped) {
                         t.tapped = true;
                         score++;
+                        soundPool.play(tapSound, 1f, 1f, 1, 0, 1f);
                         if (t.isHold) {
                             t.holding = true;
                             t.pointerId = e.getPointerId(idx);
