@@ -9,6 +9,9 @@ import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -77,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
         tv.setTextColor(color);
         tv.setTypeface(titleFont);
         tv.setGravity(Gravity.CENTER);
+        tv.setLetterSpacing(0.08f);
         tv.setShadowLayer(28f, 0, 0, color);
         return tv;
     }
@@ -229,35 +233,62 @@ public class MainActivity extends AppCompatActivity {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER);
 
-        TextView title = glowText("TILERUSH", 56f, CYAN);
+        // Two-tone vibrant neon title matching the app logo
+        TextView title = new TextView(this);
+        SpannableString span = new SpannableString("TILE RUSH");
+        span.setSpan(new ForegroundColorSpan(CYAN), 0, 4, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        span.setSpan(new ForegroundColorSpan(MAGENTA), 5, 9, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        title.setText(span);
+        title.setTextSize(52f);
+        title.setTypeface(titleFont);
+        title.setGravity(Gravity.CENTER);
+        title.setLetterSpacing(0.08f);
+        title.setShadowLayer(32f, 0, 0, Color.argb(200, 0, 225, 255));
         col.addView(title);
         fadeIn(title, 0);
 
+        // Futuristic, clean uppercase rhythm HUD tagline
         TextView tagline = new TextView(this);
-        tagline.setText("Tap fast. Hold steady. Don't miss a beat.");
-        tagline.setTextColor(Color.argb(220, 255, 255, 255));
-        tagline.setTextSize(15f);
+        tagline.setText("TAP FAST  •  HOLD STEADY  •  KEEP THE BEAT");
+        tagline.setTextColor(Color.argb(210, 190, 235, 255));
+        tagline.setTextSize(11f);
+        tagline.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        tagline.setLetterSpacing(0.18f);
         tagline.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams tagP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tagP.topMargin = 24;
+        tagP.topMargin = dpToPx(14);
         col.addView(tagline, tagP);
         fadeIn(tagline, 100);
 
+        // Sleek Arcade Golden Capsule Badge
         int hs = getHighScore();
-        TextView best = new TextView(this);
-        best.setText(hs > 0 ? "\u2605 Best: " + hs : "Tap tiles. Hold the long ones.");
-        best.setTextColor(AMBER);
-        best.setTextSize(14f);
-        best.setGravity(Gravity.CENTER);
+        TextView bestBadge = new TextView(this);
+        bestBadge.setText(hs > 0 ? "BEST SCORE: " + hs : "★  READY FOR YOUR FIRST RUN");
+        bestBadge.setTextColor(Color.rgb(255, 205, 50));
+        bestBadge.setTextSize(12f);
+        bestBadge.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
+        bestBadge.setLetterSpacing(0.12f);
+        bestBadge.setGravity(Gravity.CENTER);
+        bestBadge.setPadding(dpToPx(18), dpToPx(7), dpToPx(18), dpToPx(7));
+
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setColor(Color.argb(40, 255, 190, 40));
+        badgeBg.setStroke(dpToPx(1), Color.argb(170, 255, 205, 50));
+        badgeBg.setCornerRadius(dpToPx(18));
+        bestBadge.setBackground(badgeBg);
+        bestBadge.setElevation(dpToPx(3));
+
         LinearLayout.LayoutParams bestP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        bestP.topMargin = 14;
-        bestP.bottomMargin = 90;
-        col.addView(best, bestP);
-        fadeIn(best, 180);
+        bestP.topMargin = dpToPx(16);
+        bestP.bottomMargin = dpToPx(44);
+        col.addView(bestBadge, bestP);
+        fadeIn(bestBadge, 180);
 
-        TextView play = neonButton("\u25B6  PLAY", CYAN);
+        // Neon Cyan Play Button
+        TextView play = neonButton("▶   PLAY", CYAN, 54, 16);
+        play.setLetterSpacing(0.14f);
         play.setOnClickListener(v -> showMusicSelect());
         col.addView(play);
         fadeIn(play, 260);
@@ -280,31 +311,60 @@ public class MainActivity extends AppCompatActivity {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER);
 
-        TextView heading = glowText("CHOOSE YOUR TRACK", 24f, MAGENTA);
+        TextView heading = glowText("SELECT TRACK", 32f, MAGENTA);
+        heading.setLetterSpacing(0.12f);
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        hp.bottomMargin = 60;
         col.addView(heading, hp);
         fadeIn(heading, 0);
 
+        TextView sub = new TextView(this);
+        sub.setText("CHOOSE YOUR RHYTHM  •  FEEL THE BEAT");
+        sub.setTextColor(Color.argb(210, 190, 235, 255));
+        sub.setTextSize(11f);
+        sub.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        sub.setLetterSpacing(0.18f);
+        sub.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams subP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subP.topMargin = dpToPx(8);
+        subP.bottomMargin = dpToPx(34);
+        col.addView(sub, subP);
+        fadeIn(sub, 80);
+
         for (int i = 0; i < tracks.length; i++) {
             int idx = i;
-            TextView card = neonButton("\u266A  " + trackNames[i].toUpperCase(), trackColors[i]);
+            TextView card = neonButton("♫   " + trackNames[i].toUpperCase(), trackColors[i], dpToPx(32), dpToPx(14));
+            card.setLetterSpacing(0.08f);
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            cp.topMargin = 22;
+            cp.topMargin = dpToPx(14);
             card.setOnClickListener(v -> startGame(tracks[idx]));
             col.addView(card, cp);
-            fadeIn(card, 100 + i * 90);
+            fadeIn(card, 120 + i * 80);
         }
 
         TextView back = new TextView(this);
-        back.setText("\u2190 Back");
-        back.setTextColor(Color.argb(180, 255, 255, 255));
-        back.setTextSize(15f);
-        back.setPadding(20, 70, 20, 20);
+        back.setText("←   BACK TO TITLE");
+        back.setTextColor(Color.argb(220, 255, 255, 255));
+        back.setTextSize(12f);
+        back.setTypeface(Typeface.create("sans-serif-bold", Typeface.NORMAL));
+        back.setLetterSpacing(0.14f);
+        back.setGravity(Gravity.CENTER);
+        back.setPadding(dpToPx(22), dpToPx(10), dpToPx(22), dpToPx(10));
+
+        GradientDrawable backBg = new GradientDrawable();
+        backBg.setColor(Color.argb(35, 255, 255, 255));
+        backBg.setStroke(dpToPx(1), Color.argb(90, 255, 255, 255));
+        backBg.setCornerRadius(dpToPx(20));
+        back.setBackground(backBg);
+
+        LinearLayout.LayoutParams backP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        backP.topMargin = dpToPx(38);
         back.setOnClickListener(v -> showStartMenu());
-        col.addView(back);
+        col.addView(back, backP);
+        fadeIn(back, 300);
 
         FrameLayout.LayoutParams colP = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
@@ -334,27 +394,31 @@ public class MainActivity extends AppCompatActivity {
         gameOverCard.setGravity(Gravity.CENTER);
         gameOverCard.setVisibility(View.GONE);
 
-        TextView gameOverTitle = glowText("GAME OVER", 38f, MAGENTA);
+        TextView gameOverTitle = glowText("GAME OVER", 40f, MAGENTA);
+        gameOverTitle.setLetterSpacing(0.14f);
         LinearLayout.LayoutParams titleP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         titleP.gravity = Gravity.CENTER_HORIZONTAL;
         gameOverCard.addView(gameOverTitle, titleP);
 
-        TextView scoreDisplay = glowText("Score: 0", 24f, CYAN);
+        TextView scoreDisplay = glowText("SCORE: 0", 26f, CYAN);
+        scoreDisplay.setLetterSpacing(0.10f);
         LinearLayout.LayoutParams scP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        scP.topMargin = 14;
+        scP.topMargin = dpToPx(14);
         scP.gravity = Gravity.CENTER_HORIZONTAL;
         gameOverCard.addView(scoreDisplay, scP);
 
         TextView statusText = new TextView(this);
-        statusText.setTextSize(15f);
+        statusText.setTextSize(12f);
         statusText.setGravity(Gravity.CENTER);
-        statusText.setTypeface(titleFont);
+        statusText.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
+        statusText.setLetterSpacing(0.12f);
+        statusText.setPadding(dpToPx(18), dpToPx(7), dpToPx(18), dpToPx(7));
         LinearLayout.LayoutParams stP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        stP.topMargin = 8;
-        stP.bottomMargin = 30;
+        stP.topMargin = dpToPx(12);
+        stP.bottomMargin = dpToPx(32);
         stP.gravity = Gravity.CENTER_HORIZONTAL;
         gameOverCard.addView(statusText, stP);
 
@@ -362,11 +426,13 @@ public class MainActivity extends AppCompatActivity {
         buttonRow.setOrientation(LinearLayout.HORIZONTAL);
         buttonRow.setGravity(Gravity.CENTER);
 
-        TextView restartBtn = neonButton("RESTART", CYAN, 32, 16);
-        TextView menuBtn = neonButton("MENU", MAGENTA, 32, 16);
+        TextView restartBtn = neonButton("RESTART", CYAN, dpToPx(28), dpToPx(14));
+        restartBtn.setLetterSpacing(0.10f);
+        TextView menuBtn = neonButton("MENU", MAGENTA, dpToPx(28), dpToPx(14));
+        menuBtn.setLetterSpacing(0.10f);
         LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp1.rightMargin = 16;
+        lp1.rightMargin = dpToPx(16);
         buttonRow.addView(restartBtn, lp1);
         buttonRow.addView(menuBtn);
 
@@ -400,9 +466,21 @@ public class MainActivity extends AppCompatActivity {
             public void onGameOver(int score) {
                 boolean isHigh = updateHighScore(score);
                 gameFrame.post(() -> {
-                    scoreDisplay.setText("Score: " + score);
-                    statusText.setText(isHigh ? "NEW HIGH SCORE!" : "Best: " + getHighScore());
-                    statusText.setTextColor(isHigh ? AMBER : Color.argb(200, 255, 255, 255));
+                    scoreDisplay.setText("SCORE: " + score);
+                    statusText.setText(isHigh ? "★  NEW HIGH SCORE!  ★" : "★  BEST SCORE: " + getHighScore() + "  ★");
+
+                    GradientDrawable badgeBg = new GradientDrawable();
+                    if (isHigh) {
+                        statusText.setTextColor(Color.rgb(255, 215, 50));
+                        badgeBg.setColor(Color.argb(45, 255, 190, 40));
+                        badgeBg.setStroke(dpToPx(1), Color.rgb(255, 215, 50));
+                    } else {
+                        statusText.setTextColor(Color.argb(220, 190, 235, 255));
+                        badgeBg.setColor(Color.argb(35, 0, 225, 255));
+                        badgeBg.setStroke(dpToPx(1), Color.argb(120, 0, 225, 255));
+                    }
+                    badgeBg.setCornerRadius(dpToPx(16));
+                    statusText.setBackground(badgeBg);
 
                     gameOverCard.setVisibility(View.VISIBLE);
                     gameOverCard.bringToFront();
