@@ -86,5 +86,5 @@ Android device or emulator running Android 8.0 (API 26) or higher
 
 **Clone the repository:**
 bash
-git clone https://github.com/<your-username>/TileRush.git
+git clone https://github.com/serrraaa012/TileRush.git
 cd TileRush
