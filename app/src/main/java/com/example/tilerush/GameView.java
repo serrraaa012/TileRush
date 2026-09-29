@@ -114,10 +114,18 @@ public class GameView extends View {
     }
 
     private void endGame(Tile missed) {
+        if (gameOver) return; // Prevent multiple triggers
         gameOver = true;
         missedTile = missed;
-        if (bgMusic != null && bgMusic.isPlaying()) bgMusic.pause();
-        if (listener != null) listener.onGameOver(score);
+
+        try {
+            if (bgMusic != null && bgMusic.isPlaying()) {
+                bgMusic.pause();
+            }
+        } catch (Exception ignored) {}
+        if (listener != null) {
+            listener.onGameOver(score);
+        }
     }
 
     private void spawnTile() {
@@ -244,10 +252,6 @@ public class GameView extends View {
 
         if (gameOver) {
             canvas.drawRect(0, 0, getWidth(), getHeight(), overlayPaint);
-            float cx = getWidth() / 2f;
-            float cy = getHeight() / 2f;
-            glowText(canvas, "GAME OVER", cx, cy - 60f, 100f, MAGENTA);
-            glowText(canvas, "Score: " + score, cx, cy + 60f, 64f, CYAN);
         }
 
         if (running && !gameOver) postInvalidateOnAnimation();
@@ -308,9 +312,12 @@ public class GameView extends View {
     }
 
     public void release() {
-        if (soundPool != null) {
-            soundPool.release();
-            soundPool = null;
-        }
+        running = false;
+        try {
+            if (soundPool != null) {
+                soundPool.release();
+                soundPool = null;
+            }
+        } catch (Exception ignored) {}
     }
 }

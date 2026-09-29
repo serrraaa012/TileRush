@@ -44,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
         showStartMenu();
     }
 
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
     // ---------- high score ----------
 
     private int getHighScore() {
@@ -78,17 +82,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private TextView neonButton(String text, int color) {
+        return neonButton(text, color, 64, 30);
+    }
+
+    private TextView neonButton(String text, int color, int padX, int padY) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(20f);
+        tv.setTextSize(18f);
         tv.setTextColor(Color.WHITE);
         tv.setTypeface(titleFont);
         tv.setGravity(Gravity.CENTER);
-        tv.setPadding(70, 34, 70, 34);
+        tv.setPadding(padX, padY, padX, padY);
         GradientDrawable gd = new GradientDrawable();
         gd.setColor(Color.argb(35, Color.red(color), Color.green(color), Color.blue(color)));
-        gd.setStroke(5, color);
-        gd.setCornerRadius(44f);
+        gd.setStroke(4, color);
+        gd.setCornerRadius(36f);
         tv.setBackground(gd);
         tv.setElevation(8f);
         return tv;
@@ -111,23 +119,55 @@ public class MainActivity extends AppCompatActivity {
         v.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(450).start();
     }
 
-    // a few small floating tile shapes for visual flair on the menu screens
+    // Sleek, subtle ambient rhythm tiles in the background
     private void addFloatingDecor(FrameLayout parent) {
-        int[] colors = { CYAN, MAGENTA, AMBER, CYAN };
-        float[][] pos = { {0.06f, 0.14f}, {0.86f, 0.20f}, {0.10f, 0.78f}, {0.88f, 0.74f} };
-        for (int i = 0; i < colors.length; i++) {
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+
+        // Structured across 4 clean vertical rhythm columns (matching 4 game lanes)
+        // { xRatio, yRatio, widthDp, heightDp, colorIndex, alpha }
+        float[][] decorData = {
+            // Lane 1 (far left)
+            { 0.10f, 0.08f, 20, 38, 0, 30 },  // Cyan
+            { 0.10f, 0.42f, 22, 44, 1, 35 },  // Magenta
+            { 0.10f, 0.76f, 20, 36, 2, 28 },  // Amber
+
+            // Lane 2 (inner left - top and bottom only to keep center text clean)
+            { 0.34f, 0.04f, 18, 32, 2, 25 },  // Amber
+            { 0.34f, 0.84f, 22, 42, 0, 32 },  // Cyan
+
+            // Lane 3 (inner right - top and bottom only)
+            { 0.64f, 0.12f, 20, 36, 1, 30 },  // Magenta
+            { 0.64f, 0.80f, 18, 34, 2, 26 },  // Amber
+
+            // Lane 4 (far right)
+            { 0.88f, 0.06f, 22, 40, 0, 32 },  // Cyan
+            { 0.88f, 0.46f, 20, 38, 2, 28 },  // Amber
+            { 0.88f, 0.72f, 22, 44, 1, 35 }   // Magenta
+        };
+
+        int[] colors = { CYAN, MAGENTA, AMBER };
+
+        for (int i = 0; i < decorData.length; i++) {
+            float[] d = decorData[i];
+            int color = colors[(int) d[4]];
+            int alpha = (int) d[5];
+
             View shape = new View(this);
             GradientDrawable gd = new GradientDrawable();
-            gd.setColor(Color.argb(70, Color.red(colors[i]), Color.green(colors[i]), Color.blue(colors[i])));
-            gd.setCornerRadius(18f);
+            gd.setColor(Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color)));
+            gd.setStroke(dpToPx(1), Color.argb(alpha + 30, Color.red(color), Color.green(color), Color.blue(color)));
+            gd.setCornerRadius(dpToPx(5));
             shape.setBackground(gd);
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(60, 110);
-            lp.leftMargin = (int) (pos[i][0] * 1000);
-            lp.topMargin = (int) (pos[i][1] * 1800);
+
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dpToPx((int) d[2]), dpToPx((int) d[3]));
+            lp.leftMargin = (int) (d[0] * screenW);
+            lp.topMargin = (int) (d[1] * screenH);
             parent.addView(shape, lp);
 
-            ObjectAnimator anim = ObjectAnimator.ofFloat(shape, "translationY", -20f, 20f);
-            anim.setDuration(2200 + i * 300);
+            float floatRange = dpToPx(8);
+            ObjectAnimator anim = ObjectAnimator.ofFloat(shape, "translationY", -floatRange, floatRange);
+            anim.setDuration(2400 + (i * 150));
             anim.setRepeatMode(ValueAnimator.REVERSE);
             anim.setRepeatCount(ValueAnimator.INFINITE);
             anim.start();
@@ -288,64 +328,91 @@ public class MainActivity extends AppCompatActivity {
 
         addMuteButton(gameFrame);
 
-        LinearLayout overlay = new LinearLayout(this);
-        overlay.setOrientation(LinearLayout.VERTICAL);
-        overlay.setGravity(Gravity.CENTER);
-        overlay.setVisibility(View.GONE);
+        // --- Centered Unified Game Over Card ---
+        LinearLayout gameOverCard = new LinearLayout(this);
+        gameOverCard.setOrientation(LinearLayout.VERTICAL);
+        gameOverCard.setGravity(Gravity.CENTER);
+        gameOverCard.setVisibility(View.GONE);
+
+        TextView gameOverTitle = glowText("GAME OVER", 38f, MAGENTA);
+        LinearLayout.LayoutParams titleP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        titleP.gravity = Gravity.CENTER_HORIZONTAL;
+        gameOverCard.addView(gameOverTitle, titleP);
+
+        TextView scoreDisplay = glowText("Score: 0", 24f, CYAN);
+        LinearLayout.LayoutParams scP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        scP.topMargin = 14;
+        scP.gravity = Gravity.CENTER_HORIZONTAL;
+        gameOverCard.addView(scoreDisplay, scP);
 
         TextView statusText = new TextView(this);
-        statusText.setTextSize(16f);
+        statusText.setTextSize(15f);
         statusText.setGravity(Gravity.CENTER);
         statusText.setTypeface(titleFont);
         LinearLayout.LayoutParams stP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        stP.bottomMargin = 24;
-        overlay.addView(statusText, stP);
+        stP.topMargin = 8;
+        stP.bottomMargin = 30;
+        stP.gravity = Gravity.CENTER_HORIZONTAL;
+        gameOverCard.addView(statusText, stP);
 
         LinearLayout buttonRow = new LinearLayout(this);
         buttonRow.setOrientation(LinearLayout.HORIZONTAL);
         buttonRow.setGravity(Gravity.CENTER);
 
-        TextView restartBtn = neonButton("RESTART", CYAN);
-        TextView menuBtn = neonButton("MENU", MAGENTA);
+        TextView restartBtn = neonButton("RESTART", CYAN, 32, 16);
+        TextView menuBtn = neonButton("MENU", MAGENTA, 32, 16);
         LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp1.rightMargin = 24;
+        lp1.rightMargin = 16;
         buttonRow.addView(restartBtn, lp1);
         buttonRow.addView(menuBtn);
-        overlay.addView(buttonRow);
+
+        LinearLayout.LayoutParams rowP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowP.gravity = Gravity.CENTER_HORIZONTAL;
+        gameOverCard.addView(buttonRow, rowP);
 
         restartBtn.setOnClickListener(v -> gameView.restartFromOutside());
         menuBtn.setOnClickListener(v -> {
-            if (mediaPlayer != null) {
-                mediaPlayer.release();
-                mediaPlayer = null;
+            try {
+                if (mediaPlayer != null) {
+                    mediaPlayer.stop();
+                    mediaPlayer.release();
+                    mediaPlayer = null;
+                }
+            } catch (Exception ignored) {}
+            if (gameView != null) {
+                gameView.release();
             }
-            gameView.release();
             showStartMenu();
         });
 
-        FrameLayout.LayoutParams obP = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        obP.bottomMargin = 160;
-        gameFrame.addView(overlay, obP);
+        FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER);
+        gameFrame.addView(gameOverCard, cardParams);
 
         gameView.listener = new GameView.Listener() {
             @Override
             public void onGameOver(int score) {
                 boolean isHigh = updateHighScore(score);
-                runOnUiThread(() -> {
-                    statusText.setText(isHigh ? "\u2605 NEW HIGH SCORE!" : "Best: " + getHighScore());
+                gameFrame.post(() -> {
+                    scoreDisplay.setText("Score: " + score);
+                    statusText.setText(isHigh ? "NEW HIGH SCORE!" : "Best: " + getHighScore());
                     statusText.setTextColor(isHigh ? AMBER : Color.argb(200, 255, 255, 255));
-                    overlay.setVisibility(View.VISIBLE);
-                    fadeIn(overlay, 0);
+
+                    gameOverCard.setVisibility(View.VISIBLE);
+                    gameOverCard.bringToFront();
+                    fadeIn(gameOverCard, 0);
                 });
             }
 
             @Override
             public void onRestart() {
-                runOnUiThread(() -> overlay.setVisibility(View.GONE));
+                gameFrame.post(() -> gameOverCard.setVisibility(View.GONE));
             }
         };
 
