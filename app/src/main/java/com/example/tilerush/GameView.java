@@ -46,6 +46,12 @@ public class GameView extends View {
     private long gameOverTime = 0;
     private Tile missedTile = null;
 
+    public interface Listener {
+        void onGameOver(int score);
+        void onRestart();
+    }
+    public Listener listener;
+
     public GameView(Context context, MediaPlayer bgMusic) {
         super(context);
         this.bgMusic = bgMusic;
@@ -100,6 +106,11 @@ public class GameView extends View {
         lastTime = 0;
         if (bgMusic != null && !bgMusic.isPlaying()) bgMusic.start();
         postInvalidateOnAnimation();
+        if (listener != null) listener.onRestart();
+    }
+
+    public void restartFromOutside() {
+        restart();
     }
 
     private void endGame(Tile missed) {
@@ -107,6 +118,7 @@ public class GameView extends View {
         missedTile = missed;
         gameOverTime = System.currentTimeMillis();
         if (bgMusic != null && bgMusic.isPlaying()) bgMusic.pause();
+        if (listener != null) listener.onGameOver(score);
     }
 
     private void spawnTile() {
