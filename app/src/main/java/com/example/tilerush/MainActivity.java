@@ -5,7 +5,9 @@ import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.media.SoundPool;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -30,6 +32,9 @@ public class MainActivity extends AppCompatActivity {
 
     private GameView gameView;
     private MediaPlayer mediaPlayer;
+    private MediaPlayer menuMusic;
+    private SoundPool soundPool;
+    private int clickSound = 0;
     private FrameLayout root;
     private Typeface titleFont;
     private boolean muted = false;
@@ -42,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         titleFont = Typeface.create("sans-serif-black", Typeface.BOLD);
+        initAudio();
         root = new FrameLayout(this);
         setContentView(root);
         showStartMenu();
@@ -178,12 +184,67 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ---------- mute button ----------
+    // ---------- audio & mute ----------
+
+    private void initAudio() {
+        AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+        soundPool = new SoundPool.Builder().setMaxStreams(4).setAudioAttributes(attrs).build();
+        try {
+            clickSound = soundPool.load(this, R.raw.button_click, 1);
+        } catch (Exception ignored) {}
+    }
+
+    private void playClickSound() {
+        if (!muted && soundPool != null && clickSound != 0) {
+            try {
+                soundPool.play(clickSound, 0.9f, 0.9f, 1, 0, 1f);
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void startMenuMusic() {
+        try {
+            if (menuMusic == null) {
+                menuMusic = MediaPlayer.create(this, R.raw.tilerush_theme);
+                if (menuMusic != null) {
+                    menuMusic.setLooping(true);
+                }
+            }
+            if (menuMusic != null) {
+                float vol = muted ? 0f : 0.45f;
+                menuMusic.setVolume(vol, vol);
+                if (!menuMusic.isPlaying()) {
+                    menuMusic.start();
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void stopMenuMusic() {
+        try {
+            if (menuMusic != null && menuMusic.isPlaying()) {
+                menuMusic.pause();
+            }
+        } catch (Exception ignored) {}
+    }
 
     private void applyMuteState() {
-        if (mediaPlayer != null) {
-            mediaPlayer.setVolume(muted ? 0f : 1f, muted ? 0f : 1f);
-        }
+        float gameVol = muted ? 0f : 1f;
+        float menuVol = muted ? 0f : 0.45f;
+        try {
+            if (mediaPlayer != null) {
+                mediaPlayer.setVolume(gameVol, gameVol);
+            }
+            if (menuMusic != null) {
+                menuMusic.setVolume(menuVol, menuVol);
+            }
+            if (gameView != null) {
+                gameView.setMuted(muted);
+            }
+        } catch (Exception ignored) {}
     }
 
     private TextView buildMuteButton() {
@@ -200,6 +261,7 @@ public class MainActivity extends AppCompatActivity {
         btn.setOnClickListener(v -> {
             muted = !muted;
             applyMuteState();
+            playClickSound();
             btn.setText(muted ? "\uD83D\uDD07" : "\uD83D\uDD0A");
             GradientDrawable gd2 = new GradientDrawable();
             gd2.setColor(Color.argb(50, 255, 255, 255));
@@ -222,6 +284,8 @@ public class MainActivity extends AppCompatActivity {
     // ---------- screens ----------
 
     private void showStartMenu() {
+        startMenuMusic();
+
         root.removeAllViews();
         root.setBackground(bgGradient());
         setContentView(root);
@@ -289,7 +353,10 @@ public class MainActivity extends AppCompatActivity {
         // Neon Cyan Play Button
         TextView play = neonButton("▶   PLAY", CYAN, 54, 16);
         play.setLetterSpacing(0.14f);
-        play.setOnClickListener(v -> showMusicSelect());
+        play.setOnClickListener(v -> {
+            playClickSound();
+            showMusicSelect();
+        });
         col.addView(play);
         fadeIn(play, 260);
         play.postDelayed(() -> pulse(play), 750);
@@ -300,6 +367,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showMusicSelect() {
+        startMenuMusic();
+
         root.removeAllViews();
         root.setBackground(bgGradient());
         setContentView(root);
@@ -339,7 +408,10 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             cp.topMargin = dpToPx(14);
-            card.setOnClickListener(v -> startGame(tracks[idx]));
+            card.setOnClickListener(v -> {
+                playClickSound();
+                startGame(tracks[idx]);
+            });
             col.addView(card, cp);
             fadeIn(card, 120 + i * 80);
         }
@@ -362,7 +434,10 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams backP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         backP.topMargin = dpToPx(38);
-        back.setOnClickListener(v -> showStartMenu());
+        back.setOnClickListener(v -> {
+            playClickSound();
+            showStartMenu();
+        });
         col.addView(back, backP);
         fadeIn(back, 300);
 
@@ -372,15 +447,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startGame(int trackRes) {
+        stopMenuMusic();
+
         mediaPlayer = MediaPlayer.create(this, trackRes);
         if (mediaPlayer == null) {
             Toast.makeText(this, "Couldn't load that track", Toast.LENGTH_SHORT).show();
+            startMenuMusic();
             return;
         }
         mediaPlayer.setLooping(true);
         applyMuteState();
 
         gameView = new GameView(this, mediaPlayer);
+        gameView.setMuted(muted);
 
         FrameLayout gameFrame = new FrameLayout(this);
         gameFrame.addView(gameView, new FrameLayout.LayoutParams(
@@ -441,8 +520,13 @@ public class MainActivity extends AppCompatActivity {
         rowP.gravity = Gravity.CENTER_HORIZONTAL;
         gameOverCard.addView(buttonRow, rowP);
 
-        restartBtn.setOnClickListener(v -> gameView.restartFromOutside());
+        restartBtn.setOnClickListener(v -> {
+            playClickSound();
+            stopMenuMusic();
+            gameView.restartFromOutside();
+        });
         menuBtn.setOnClickListener(v -> {
+            playClickSound();
             try {
                 if (mediaPlayer != null) {
                     mediaPlayer.stop();
@@ -452,6 +536,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception ignored) {}
             if (gameView != null) {
                 gameView.release();
+                gameView = null;
             }
             showStartMenu();
         });
@@ -465,6 +550,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onGameOver(int score) {
                 boolean isHigh = updateHighScore(score);
+                // Allow error sound to punch through, then resume soft ambient menu theme
+                gameFrame.postDelayed(() -> {
+                    if (gameView != null && gameView.isGameOver()) {
+                        startMenuMusic();
+                    }
+                }, 450);
+
                 gameFrame.post(() -> {
                     scoreDisplay.setText("SCORE: " + score);
                     statusText.setText(isHigh ? "★  NEW HIGH SCORE!  ★" : "★  BEST SCORE: " + getHighScore() + "  ★");
@@ -490,6 +582,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onRestart() {
+                stopMenuMusic();
                 gameFrame.post(() -> gameOverCard.setVisibility(View.GONE));
             }
         };
@@ -501,23 +594,40 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (gameView != null) gameView.resume();
+        if (gameView != null && !gameView.isGameOver()) {
+            gameView.resume();
+        } else {
+            startMenuMusic();
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         if (gameView != null) gameView.pause();
-        if (mediaPlayer != null && mediaPlayer.isPlaying()) mediaPlayer.pause();
+        try {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) mediaPlayer.pause();
+            if (menuMusic != null && menuMusic.isPlaying()) menuMusic.pause();
+        } catch (Exception ignored) {}
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         if (gameView != null) gameView.release();
-        if (mediaPlayer != null) {
-            mediaPlayer.release();
-            mediaPlayer = null;
-        }
+        try {
+            if (mediaPlayer != null) {
+                mediaPlayer.release();
+                mediaPlayer = null;
+            }
+            if (menuMusic != null) {
+                menuMusic.release();
+                menuMusic = null;
+            }
+            if (soundPool != null) {
+                soundPool.release();
+                soundPool = null;
+            }
+        } catch (Exception ignored) {}
     }
 }

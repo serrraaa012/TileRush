@@ -53,7 +53,9 @@ public class GameView extends View {
 
     private SoundPool soundPool;
     private int tapSound;
+    private int errorSound;
     private MediaPlayer bgMusic;
+    private boolean muted = false;
 
     public GameView(Context context, MediaPlayer bgMusic) {
         super(context);
@@ -74,7 +76,22 @@ public class GameView extends View {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build();
         soundPool = new SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build();
-        tapSound = soundPool.load(context, R.raw.tap, 1);
+        try {
+            tapSound = soundPool.load(context, R.raw.tap, 1);
+            errorSound = soundPool.load(context, R.raw.error, 1);
+        } catch (Exception ignored) {}
+    }
+
+    public void setMuted(boolean muted) {
+        this.muted = muted;
+    }
+
+    private void playSound(int soundId) {
+        if (!muted && soundPool != null && soundId != 0) {
+            try {
+                soundPool.play(soundId, 1f, 1f, 1, 0, 1f);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Override
@@ -99,6 +116,10 @@ public class GameView extends View {
 
     public void restartFromOutside() {
         restart();
+    }
+
+    public boolean isGameOver() {
+        return gameOver;
     }
 
     private void restart() {
@@ -128,6 +149,9 @@ public class GameView extends View {
                 bgMusic.pause();
             }
         } catch (Exception ignored) {}
+
+        playSound(errorSound);
+
         if (listener != null) {
             listener.onGameOver(score);
         }
@@ -284,7 +308,7 @@ public class GameView extends View {
                     if (!t.tapped) {
                         t.tapped = true;
                         score++;
-                        soundPool.play(tapSound, 1f, 1f, 1, 0, 1f);
+                        playSound(tapSound);
                         if (t.isHold) {
                             t.holding = true;
                             t.pointerId = e.getPointerId(idx);
