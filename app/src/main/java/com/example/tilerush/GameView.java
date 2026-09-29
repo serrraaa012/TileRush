@@ -1,15 +1,16 @@
 package com.example.tilerush;
 
-import android.media.AudioAttributes;
-import android.media.MediaPlayer;
-import android.media.SoundPool;
 import android.content.Context;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
+import android.media.SoundPool;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -19,9 +20,13 @@ import java.util.List;
 import java.util.Random;
 
 public class GameView extends View {
-    private SoundPool soundPool;
-    private int tapSound;
-    private MediaPlayer bgMusic;
+
+    public interface Listener {
+        void onGameOver(int score);
+        void onRestart();
+    }
+    public Listener listener;
+
     private static final int LANES = 4;
     private static final int CYAN = Color.rgb(0, 225, 255);
     private static final int MAGENTA = Color.rgb(255, 70, 200);
@@ -32,34 +37,36 @@ public class GameView extends View {
     private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint linePaint = new Paint();
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint overlayPaint = new Paint();
     private final RectF rect = new RectF();
     private final List<Tile> tiles = new ArrayList<>();
     private final Random random = new Random();
 
-    private float laneWidth, tileHeight, baseSpeed; // baseSpeed = pixels per second
+    private float laneWidth, tileHeight, baseSpeed;
     private long lastTime = 0;
     private float spawnDist = 0;
     private int score = 0;
     private boolean running = false;
     private boolean gameOver = false;
-    private long gameOverTime = 0;
     private Tile missedTile = null;
 
-    public interface Listener {
-        void onGameOver(int score);
-        void onRestart();
-    }
-    public Listener listener;
+    private SoundPool soundPool;
+    private int tapSound;
+    private MediaPlayer bgMusic;
 
     public GameView(Context context, MediaPlayer bgMusic) {
         super(context);
         this.bgMusic = bgMusic;
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null); // needed for the glow effect below
+
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(5f);
         linePaint.setColor(Color.argb(60, 130, 210, 255));
         linePaint.setStrokeWidth(3f);
         textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setColor(Color.WHITE);
+        glowPaint.setTextAlign(Paint.Align.CENTER);
         overlayPaint.setColor(Color.argb(215, 8, 6, 28));
 
         AudioAttributes attrs = new AudioAttributes.Builder()
@@ -90,11 +97,8 @@ public class GameView extends View {
         running = false;
     }
 
-    public void release() {
-        if (soundPool != null) {
-            soundPool.release();
-            soundPool = null;
-        }
+    public void restartFromOutside() {
+        restart();
     }
 
     private void restart() {
@@ -109,43 +113,34 @@ public class GameView extends View {
         if (listener != null) listener.onRestart();
     }
 
-    public void restartFromOutside() {
-        restart();
-    }
-
     private void endGame(Tile missed) {
         gameOver = true;
         missedTile = missed;
-        gameOverTime = System.currentTimeMillis();
         if (bgMusic != null && bgMusic.isPlaying()) bgMusic.pause();
         if (listener != null) listener.onGameOver(score);
     }
 
     private void spawnTile() {
         int lane = random.nextInt(LANES);
-        // hold tiles start appearing once the score reaches 5
         boolean hold = score >= 5 && random.nextFloat() < 0.25f;
-        int rows = hold ? 2 + random.nextInt(2) : 1;   // hold tiles are 2 or 3 rows long
+        int rows = hold ? 2 + random.nextInt(2) : 1;
         float h = rows * tileHeight;
         tiles.add(new Tile(lane, -h + spawnDist, h, hold));
-        spawnDist -= (rows - 1) * tileHeight;           // leave room so rows stay lined up
+        spawnDist -= (rows - 1) * tileHeight;
     }
 
     private void update(float dt) {
-        // speed grows with score, up to 2x
         float speed = baseSpeed * (1f + Math.min(score, 100) * 0.01f);
 
         for (Tile t : tiles) {
             t.y += speed * dt;
-            // hold finished when the tile's tail reaches the hold line
             if (t.holding && t.y >= t.touchY) {
                 t.holding = false;
                 t.completed = true;
-                score += 2;   // bonus for finishing a hold
+                score += 2;
             }
         }
 
-        // game over if an untapped tile reaches the bottom
         for (Tile t : tiles) {
             if (!t.tapped && t.y + t.height >= getHeight()) {
                 endGame(t);
@@ -153,13 +148,11 @@ public class GameView extends View {
             }
         }
 
-        // remove tiles that left the screen
         Iterator<Tile> it = tiles.iterator();
         while (it.hasNext()) {
             if (it.next().y > getHeight()) it.remove();
         }
 
-        // spawn new tiles based on distance travelled
         spawnDist += speed * dt;
         while (spawnDist >= tileHeight) {
             spawnDist -= tileHeight;
@@ -186,7 +179,6 @@ public class GameView extends View {
 
         rect.set(left, top, right, bottom);
 
-        // tapped normal tiles and finished hold tiles fade out
         if ((t.tapped && !t.isHold) || t.completed) {
             fillPaint.setColor(Color.argb(50, Color.red(color), Color.green(color), Color.blue(color)));
             canvas.drawRoundRect(rect, r, r, fillPaint);
@@ -194,15 +186,12 @@ public class GameView extends View {
         }
 
         if (t.isHold && !t.holding) {
-            // untouched hold tile: solid glowing colour
             fillPaint.setColor(color);
             canvas.drawRoundRect(rect, r, r, fillPaint);
         } else {
-            // normal tile, or a hold tile being held: dark body with bright outline
             fillPaint.setColor(darken(color));
             canvas.drawRoundRect(rect, r, r, fillPaint);
             if (t.isHold && t.holding) {
-                // bright part = the section that still has to be held
                 float brightBottom = Math.min(bottom, t.touchY);
                 if (brightBottom > top) {
                     fillPaint.setColor(color);
@@ -215,13 +204,22 @@ public class GameView extends View {
             canvas.drawRoundRect(rect, r, r, strokePaint);
         }
 
-        // white bar down the middle of hold tiles
         if (t.isHold) {
             float cx = (left + right) / 2f;
             fillPaint.setColor(Color.argb(210, 255, 255, 255));
             rect.set(cx - 6, top + 30, cx + 6, bottom - 30);
             canvas.drawRoundRect(rect, 6f, 6f, fillPaint);
         }
+    }
+
+    // glowing text: a blurred colored pass behind a crisp white pass
+    private void glowText(Canvas canvas, String text, float x, float y, float size, int color) {
+        textPaint.setTextSize(size);
+        glowPaint.setTextSize(size);
+        glowPaint.setColor(color);
+        glowPaint.setMaskFilter(new BlurMaskFilter(size * 0.35f, BlurMaskFilter.Blur.NORMAL));
+        canvas.drawText(text, x, y, glowPaint);
+        canvas.drawText(text, x, y, textPaint);
     }
 
     @Override
@@ -242,25 +240,14 @@ public class GameView extends View {
 
         for (Tile t : tiles) drawTile(canvas, t);
 
-        // score
-        textPaint.setColor(Color.WHITE);
-        textPaint.setTextSize(96f);
-        canvas.drawText(String.valueOf(score), getWidth() / 2f, 150f, textPaint);
+        glowText(canvas, String.valueOf(score), getWidth() / 2f, 150f, 90f, CYAN);
 
-        // game over screen
         if (gameOver) {
             canvas.drawRect(0, 0, getWidth(), getHeight(), overlayPaint);
             float cx = getWidth() / 2f;
             float cy = getHeight() / 2f;
-            textPaint.setColor(Color.WHITE);
-            textPaint.setTextSize(110f);
-            canvas.drawText("Game Over", cx, cy - 80f, textPaint);
-            textPaint.setColor(CYAN);
-            textPaint.setTextSize(80f);
-            canvas.drawText("Score: " + score, cx, cy + 40f, textPaint);
-            textPaint.setColor(Color.LTGRAY);
-            textPaint.setTextSize(55f);
-            canvas.drawText("Tap to restart", cx, cy + 160f, textPaint);
+            glowText(canvas, "GAME OVER", cx, cy - 60f, 100f, MAGENTA);
+            glowText(canvas, "Score: " + score, cx, cy + 60f, 64f, CYAN);
         }
 
         if (running && !gameOver) postInvalidateOnAnimation();
@@ -272,9 +259,8 @@ public class GameView extends View {
         int idx = e.getActionIndex();
 
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-            // on the game over screen, a tap restarts (small delay avoids accidental taps)
             if (gameOver) {
-                if (System.currentTimeMillis() - gameOverTime > 600) restart();
+                // tap-to-restart removed on purpose — the Restart button handles this now
                 return true;
             }
 
@@ -293,8 +279,6 @@ public class GameView extends View {
                         if (t.isHold) {
                             t.holding = true;
                             t.pointerId = e.getPointerId(idx);
-                            // the tail must travel at least 80% of the tile's length,
-                            // so tapping the top of a hold tile doesn't skip the hold
                             t.touchY = Math.max(y, t.y + t.height * 0.8f);
                         }
                     }
@@ -302,7 +286,6 @@ public class GameView extends View {
                 }
             }
 
-            // tapping where there is no tile ends the game
             if (!hit) endGame(null);
             return true;
         }
@@ -312,7 +295,6 @@ public class GameView extends View {
             if (!gameOver) {
                 int pid = e.getPointerId(idx);
                 for (Tile t : tiles) {
-                    // letting go of a hold tile too early ends the game
                     if (t.holding && (action == MotionEvent.ACTION_CANCEL || t.pointerId == pid)) {
                         endGame(t);
                         break;
@@ -323,5 +305,12 @@ public class GameView extends View {
         }
 
         return true;
+    }
+
+    public void release() {
+        if (soundPool != null) {
+            soundPool.release();
+            soundPool = null;
+        }
     }
 }
