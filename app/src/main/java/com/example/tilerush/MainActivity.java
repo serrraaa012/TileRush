@@ -16,6 +16,7 @@ import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,6 +29,9 @@ public class MainActivity extends AppCompatActivity {
     private static final int CYAN = Color.rgb(0, 225, 255);
     private static final int MAGENTA = Color.rgb(255, 70, 200);
     private static final int AMBER = Color.rgb(255, 190, 40);
+    private static final int GREEN = Color.rgb(0, 240, 160);
+    private static final int PURPLE = Color.rgb(185, 80, 255);
+    private static final int CORAL = Color.rgb(255, 95, 70);
     private static final String PREFS = "tilerush_prefs";
 
     private GameView gameView;
@@ -39,9 +43,16 @@ public class MainActivity extends AppCompatActivity {
     private Typeface titleFont;
     private boolean muted = false;
 
-    private final int[] tracks = { R.raw.bg_music1, R.raw.bg_music2, R.raw.bg_music3 };
-    private final String[] trackNames = { "Upbeat", "Chill", "Intense" };
-    private final int[] trackColors = { CYAN, MAGENTA, AMBER };
+    private final int[] tracks = {
+            R.raw.bg_music1, R.raw.bg_music2, R.raw.bg_music3,
+            R.raw.bg_music4, R.raw.bg_music5, R.raw.bg_music6
+    };
+    private final String[] trackNames = {
+            "Upbeat", "Chill", "Intense", "Cyber", "Synth", "Overdrive"
+    };
+    private final int[] trackColors = {
+            CYAN, MAGENTA, AMBER, GREEN, PURPLE, CORAL
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -214,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             if (menuMusic != null) {
-                float vol = muted ? 0f : 0.45f;
+                float vol = muted ? 0f : 0.85f;
                 menuMusic.setVolume(vol, vol);
                 if (!menuMusic.isPlaying()) {
                     menuMusic.start();
@@ -233,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void applyMuteState() {
         float gameVol = muted ? 0f : 1f;
-        float menuVol = muted ? 0f : 0.45f;
+        float menuVol = muted ? 0f : 0.85f;
         try {
             if (mediaPlayer != null) {
                 mediaPlayer.setVolume(gameVol, gameVol);
@@ -374,13 +385,18 @@ public class MainActivity extends AppCompatActivity {
         setContentView(root);
 
         addFloatingDecor(root);
-        addMuteButton(root);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER);
+        col.setPadding(dpToPx(24), dpToPx(32), dpToPx(24), dpToPx(32));
 
-        TextView heading = glowText("SELECT TRACK", 32f, MAGENTA);
+        TextView heading = glowText("SELECT TRACK", 30f, MAGENTA);
         heading.setLetterSpacing(0.12f);
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -396,24 +412,24 @@ public class MainActivity extends AppCompatActivity {
         sub.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams subP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        subP.topMargin = dpToPx(8);
-        subP.bottomMargin = dpToPx(34);
+        subP.topMargin = dpToPx(6);
+        subP.bottomMargin = dpToPx(20);
         col.addView(sub, subP);
         fadeIn(sub, 80);
 
         for (int i = 0; i < tracks.length; i++) {
             int idx = i;
-            TextView card = neonButton("♫   " + trackNames[i].toUpperCase(), trackColors[i], dpToPx(32), dpToPx(14));
+            TextView card = neonButton("♫   " + trackNames[i].toUpperCase(), trackColors[i], dpToPx(28), dpToPx(11));
             card.setLetterSpacing(0.08f);
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            cp.topMargin = dpToPx(14);
+            cp.topMargin = dpToPx(10);
             card.setOnClickListener(v -> {
                 playClickSound();
                 startGame(tracks[idx]);
             });
             col.addView(card, cp);
-            fadeIn(card, 120 + i * 80);
+            fadeIn(card, 100 + i * 40);
         }
 
         TextView back = new TextView(this);
@@ -423,7 +439,7 @@ public class MainActivity extends AppCompatActivity {
         back.setTypeface(Typeface.create("sans-serif-bold", Typeface.NORMAL));
         back.setLetterSpacing(0.14f);
         back.setGravity(Gravity.CENTER);
-        back.setPadding(dpToPx(22), dpToPx(10), dpToPx(22), dpToPx(10));
+        back.setPadding(dpToPx(20), dpToPx(9), dpToPx(20), dpToPx(9));
 
         GradientDrawable backBg = new GradientDrawable();
         backBg.setColor(Color.argb(35, 255, 255, 255));
@@ -433,17 +449,22 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout.LayoutParams backP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        backP.topMargin = dpToPx(38);
+        backP.topMargin = dpToPx(22);
         back.setOnClickListener(v -> {
             playClickSound();
             showStartMenu();
         });
         col.addView(back, backP);
-        fadeIn(back, 300);
+        fadeIn(back, 360);
 
-        FrameLayout.LayoutParams colP = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
-        root.addView(col, colP);
+        scroll.addView(col, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+
+        FrameLayout.LayoutParams scrollP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        root.addView(scroll, scrollP);
+
+        addMuteButton(root);
     }
 
     private void startGame(int trackRes) {
