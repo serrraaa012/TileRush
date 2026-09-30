@@ -75,6 +75,11 @@ public class GameView extends View {
     private final Paint judgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint rimGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint rimSpecularPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint levelBadgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bannerTitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bannerGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bannerSubPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint flashPaint = new Paint();
 
     private final RectF rect = new RectF();
     private final RectF rectInner = new RectF();
@@ -92,6 +97,7 @@ public class GameView extends View {
     private final List<HitRipple> ripples = new ArrayList<>();
     private final List<HitParticle> particles = new ArrayList<>();
     private final List<HitPopup> popups = new ArrayList<>();
+    private final List<Integer> zigzagQueue = new ArrayList<>();
     private final float[] lanePress = new float[LANES];
     private final Random random = new Random();
 
@@ -102,6 +108,14 @@ public class GameView extends View {
     private boolean running = false;
     private boolean gameOver = false;
     private Tile missedTile = null;
+
+    // Levels & transitions
+    private int currentLevel = 1; // 1 = Normal, 2 = Rush, 3 = Hard (Zigzag)
+    private String bannerTitle = null;
+    private String bannerSub = null;
+    private int bannerColor = CYAN;
+    private float bannerTimer = 0f;
+    private float screenFlashAlpha = 0f;
 
     private SoundPool soundPool;
     private int tapSound;
@@ -144,6 +158,23 @@ public class GameView extends View {
         popupPaint.setTextAlign(Paint.Align.CENTER);
         popupPaint.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
 
+        levelBadgePaint.setTextAlign(Paint.Align.CENTER);
+        levelBadgePaint.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+        levelBadgePaint.setLetterSpacing(0.12f);
+
+        bannerTitlePaint.setTextAlign(Paint.Align.CENTER);
+        bannerTitlePaint.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+        bannerTitlePaint.setLetterSpacing(0.12f);
+
+        bannerGlowPaint.setTextAlign(Paint.Align.CENTER);
+        bannerGlowPaint.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+        bannerGlowPaint.setLetterSpacing(0.12f);
+
+        bannerSubPaint.setTextAlign(Paint.Align.CENTER);
+        bannerSubPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        bannerSubPaint.setLetterSpacing(0.14f);
+
+        flashPaint.setStyle(Paint.Style.FILL);
         overlayPaint.setColor(Color.argb(215, 8, 6, 28));
 
         AudioAttributes attrs = new AudioAttributes.Builder()
@@ -215,7 +246,7 @@ public class GameView extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         laneWidth = w / (float) LANES;
         tileHeight = h / 4f;
-        baseSpeed = h * 0.6f;
+        baseSpeed = h * 0.58f;
 
         bgPaint.setShader(new LinearGradient(0, 0, 0, h,
                 Color.rgb(10, 10, 34), Color.rgb(56, 18, 112), Shader.TileMode.CLAMP));
@@ -252,12 +283,18 @@ public class GameView extends View {
         ripples.clear();
         particles.clear();
         popups.clear();
+        zigzagQueue.clear();
         for (int i = 0; i < LANES; i++) lanePress[i] = 0f;
         score = 0;
         spawnDist = 0;
         gameOver = false;
         missedTile = null;
         lastTime = 0;
+        currentLevel = 1;
+        bannerTitle = null;
+        bannerTimer = 0f;
+        screenFlashAlpha = 0f;
+
         try {
             if (bgMusic != null) {
                 bgMusic.seekTo(0);
@@ -286,9 +323,45 @@ public class GameView extends View {
         }
     }
 
+    private void triggerLevelTransition(String title, String subtitle, int color) {
+        bannerTitle = title;
+        bannerSub = subtitle;
+        bannerColor = color;
+        bannerTimer = 1.9f;
+        screenFlashAlpha = 0.40f;
+        playSound(tapSound);
+    }
+
     private void spawnTile() {
-        int lane = random.nextInt(LANES);
-        boolean hold = score >= 5 && random.nextFloat() < 0.25f;
+        int lane;
+        boolean hold = false;
+
+        // Level 3 (Hard Mode): Generate fluid zigzag staircase waves
+        if (currentLevel >= 3) {
+            if (zigzagQueue.isEmpty() && random.nextFloat() < 0.65f) {
+                boolean leftToRight = random.nextBoolean();
+                if (leftToRight) {
+                    int[] pattern = {0, 1, 2, 3, 2, 1, 0};
+                    for (int p : pattern) zigzagQueue.add(p);
+                } else {
+                    int[] pattern = {3, 2, 1, 0, 1, 2, 3};
+                    for (int p : pattern) zigzagQueue.add(p);
+                }
+            }
+
+            if (!zigzagQueue.isEmpty()) {
+                lane = zigzagQueue.remove(0);
+                hold = false; // Fast single-tap cascading staircase
+            } else {
+                lane = random.nextInt(LANES);
+                hold = random.nextFloat() < 0.20f;
+            }
+        } else {
+            // Level 1 or 2
+            lane = random.nextInt(LANES);
+            hold = (score >= 5) && (random.nextFloat() < (currentLevel == 2 ? 0.30f : 0.22f));
+        }
+
         int rows = hold ? 2 + random.nextInt(2) : 1;
         float h = rows * tileHeight;
         tiles.add(new Tile(lane, -h + spawnDist, h, hold));
@@ -296,7 +369,6 @@ public class GameView extends View {
     }
 
     private void spawnBubblePopEffects(float x, float y, int color, boolean isHold) {
-        // Expanding dual bubble shockwave
         HitRipple ripple = new HitRipple();
         ripple.x = x;
         ripple.y = y;
@@ -305,7 +377,6 @@ public class GameView extends View {
         ripple.maxRadius = isHold ? 95f : 78f;
         ripples.add(ripple);
 
-        // Popping bubble droplets
         int count = isHold ? 14 : 9;
         for (int i = 0; i < count; i++) {
             HitParticle p = new HitParticle();
@@ -320,7 +391,6 @@ public class GameView extends View {
             particles.add(p);
         }
 
-        // Floating popup score
         HitPopup pop = new HitPopup();
         pop.x = x;
         pop.y = y - 18f;
@@ -334,15 +404,53 @@ public class GameView extends View {
     }
 
     private void update(float dt) {
-        float speed = baseSpeed * (1f + Math.min(score, 100) * 0.01f);
+        // Detect round / level progression
+        int newLevel;
+        if (score < 30) {
+            newLevel = 1;
+        } else if (score < 70) {
+            newLevel = 2;
+        } else {
+            newLevel = 3;
+        }
+
+        if (newLevel != currentLevel) {
+            if (newLevel == 2) {
+                triggerLevelTransition("SPEED UP!", "LEVEL 2 • TURBO RUSH", CYAN);
+            } else if (newLevel == 3) {
+                triggerLevelTransition("OVERDRIVE!", "HARD LEVEL • ZIGZAG MANIA", Color.rgb(255, 65, 95));
+            }
+            currentLevel = newLevel;
+        }
+
+        // Speed scaling by mode
+        float speed;
+        if (currentLevel == 1) {
+            speed = baseSpeed * (1f + score * 0.008f);
+        } else if (currentLevel == 2) {
+            speed = baseSpeed * (1.38f + (score - 30) * 0.008f);
+        } else {
+            speed = baseSpeed * (1.75f + Math.min(score - 70, 80) * 0.006f);
+        }
+
+        // Update banner and flash timers
+        if (bannerTimer > 0f) {
+            bannerTimer -= dt;
+            if (bannerTimer <= 0f) {
+                bannerTitle = null;
+            }
+        }
+        if (screenFlashAlpha > 0f) {
+            screenFlashAlpha = Math.max(0f, screenFlashAlpha - dt * 2.2f);
+        }
 
         for (Tile t : tiles) {
             t.y += speed * dt;
             if (t.tapped && !t.isHold) {
-                t.tapAnim += dt * 5.5f; // finishes bubble pop in ~0.18s
+                t.tapAnim += dt * 5.5f;
             }
             if (t.holding) {
-                // Gentle bubbling sparks while holding
+                t.tapAnim += dt * 3.0f;
                 if (random.nextFloat() < 0.38f) {
                     HitParticle p = new HitParticle();
                     float cx = t.lane * laneWidth + laneWidth / 2f;
@@ -355,6 +463,7 @@ public class GameView extends View {
                     particles.add(p);
                 }
 
+                // When the tail reaches the player's finger, hold is complete!
                 if (t.y >= t.touchY) {
                     t.holding = false;
                     t.completed = true;
@@ -375,7 +484,7 @@ public class GameView extends View {
         Iterator<Tile> it = tiles.iterator();
         while (it.hasNext()) {
             Tile t = it.next();
-            if (t.y > getHeight() || (t.tapped && !t.isHold && t.tapAnim >= 1f)) {
+            if (t.y > getHeight() || (t.tapped && !t.isHold && t.tapAnim >= 1f) || (t.completed && t.tapAnim >= 1f)) {
                 it.remove();
             }
         }
@@ -452,7 +561,7 @@ public class GameView extends View {
             alphaMult = Math.max(0f, 1f - t.tapAnim);
             if (alphaMult <= 0.01f) return;
 
-            // Bubble pop scale expansion: tile expands slightly as it bursts
+            // Bubble pop scale expansion
             float popScale = t.tapAnim * dpToPx(5);
             left -= popScale;
             right += popScale;
@@ -491,7 +600,7 @@ public class GameView extends View {
             fillPaint.setShader(null);
         }
 
-        // 2. Outer Soft Neon Glow Rim (halo aura framing the tile)
+        // 2. Outer Soft Neon Glow Rim
         rimGlowPaint.setColor(isFlashing ? Color.WHITE : color);
         rimGlowPaint.setAlpha((int)(95 * alphaMult));
         rimGlowPaint.setStrokeWidth(dpToPx(5f));
@@ -503,7 +612,7 @@ public class GameView extends View {
         strokePaint.setStrokeWidth(isFlashing ? dpToPx(4f) : dpToPx(2.8f));
         canvas.drawRoundRect(rect, r, r, strokePaint);
 
-        // 4. Inner Luminous Specular Chamfer (metallic glass bevel)
+        // 4. Inner Luminous Specular Chamfer
         float inset = dpToPx(2.2f);
         rectInner.set(left + inset, top + inset, right - inset, bottom - inset);
         innerStrokePaint.setColor(Color.WHITE);
@@ -516,7 +625,7 @@ public class GameView extends View {
         rimSpecularPaint.setStrokeWidth(dpToPx(2.2f));
         canvas.drawLine(left + r * 0.75f, top + dpToPx(1.5f), right - r * 0.75f, top + dpToPx(1.5f), rimSpecularPaint);
 
-        // 6. Radiant Leading Contact Bar (at the bottom strike edge)
+        // 6. Radiant Leading Contact Bar (at bottom strike edge)
         float barMargin = dpToPx(10f);
         rectInner.set(left + barMargin, bottom - dpToPx(7f), right - barMargin, bottom - dpToPx(2.5f));
         fillPaint.setColor(color);
@@ -558,12 +667,27 @@ public class GameView extends View {
 
     private void drawHoldTile(Canvas canvas, Tile t, float left, float top, float right, float bottom, float r, int color) {
         float cx = (left + right) / 2f;
+        float headH = tileHeight * 0.70f;
+        float inset = dpToPx(2.2f);
 
         if (t.completed) {
-            fillPaint.setColor(Color.argb(40, Color.red(color), Color.green(color), Color.blue(color)));
+            float fade = Math.max(0f, 1f - t.tapAnim);
+            if (fade <= 0.01f) return;
+            fillPaint.setColor(Color.argb((int)(35 * fade), Color.red(color), Color.green(color), Color.blue(color)));
             canvas.drawRoundRect(rect, r, r, fillPaint);
             return;
         }
+
+        // Active bottom edge of unplayed tile:
+        // When holding, the tile below the finger is consumed, so unplayed track stops at t.touchY!
+        float activeBottom = bottom;
+        if (t.holding) {
+            activeBottom = Math.min(bottom, t.touchY);
+        }
+
+        if (activeBottom <= top) return;
+
+        rect.set(left, top, right, activeBottom);
 
         // 1. Sustain Ribbon Track (gradient translucent body)
         if (holdTrackShader != null) {
@@ -578,55 +702,37 @@ public class GameView extends View {
 
         // 2. Track Outer Glow Rim
         rimGlowPaint.setColor(color);
-        rimGlowPaint.setAlpha(t.completed ? 30 : 85);
+        rimGlowPaint.setAlpha(85);
         rimGlowPaint.setStrokeWidth(dpToPx(5f));
         canvas.drawRoundRect(rect, r, r, rimGlowPaint);
 
         // 3. Track Primary Neon Rim Frame
         strokePaint.setColor(color);
-        strokePaint.setAlpha(t.completed ? 45 : 245);
+        strokePaint.setAlpha(245);
         strokePaint.setStrokeWidth(dpToPx(2.8f));
         canvas.drawRoundRect(rect, r, r, strokePaint);
 
         // 4. Track Inner Chamfer
-        float inset = dpToPx(2.2f);
-        rectInner.set(left + inset, top + inset, right - inset, bottom - inset);
+        rectInner.set(left + inset, top + inset, right - inset, activeBottom - inset);
         innerStrokePaint.setColor(Color.WHITE);
-        innerStrokePaint.setAlpha(t.completed ? 25 : 85);
+        innerStrokePaint.setAlpha(85);
         innerStrokePaint.setStrokeWidth(dpToPx(1.3f));
         canvas.drawRoundRect(rectInner, Math.max(2f, r - inset), Math.max(2f, r - inset), innerStrokePaint);
 
-        // 5. Active charged portion while holding
-        if (t.holding) {
-            float brightBottom = Math.min(bottom, t.touchY);
-            if (brightBottom > top) {
-                rectInner.set(left + inset, top + inset, right - inset, brightBottom);
-                fillPaint.setColor(Color.argb(130, 255, 220, 100));
-                canvas.drawRoundRect(rectInner, r, r, fillPaint);
+        // 5. Central luminous laser conduit
+        rectInner.set(cx - dpToPx(7f), top + dpToPx(10f), cx + dpToPx(7f), activeBottom - dpToPx(10f));
+        if (rectInner.bottom > rectInner.top) {
+            fillPaint.setColor(Color.argb(85, 255, 215, 80));
+            canvas.drawRoundRect(rectInner, dpToPx(7f), dpToPx(7f), fillPaint);
 
-                // Luminous contact bubble under finger
-                fillPaint.setColor(Color.argb(80, 255, 255, 255));
-                canvas.drawCircle(cx, t.touchY, 20f, fillPaint);
-                fillPaint.setColor(Color.WHITE);
-                canvas.drawCircle(cx, t.touchY, 11f, fillPaint);
-                fillPaint.setColor(color);
-                canvas.drawCircle(cx, t.touchY, 7f, fillPaint);
-            }
+            rectInner.set(cx - dpToPx(2.5f), top + dpToPx(12f), cx + dpToPx(2.5f), activeBottom - dpToPx(12f));
+            fillPaint.setColor(Color.argb(190, 255, 255, 240));
+            canvas.drawRoundRect(rectInner, dpToPx(2.5f), dpToPx(2.5f), fillPaint);
         }
 
-        // 6. Central luminous laser conduit
-        rectInner.set(cx - dpToPx(7f), top + dpToPx(12f), cx + dpToPx(7f), bottom - dpToPx(12f));
-        fillPaint.setColor(Color.argb(85, 255, 215, 80));
-        canvas.drawRoundRect(rectInner, dpToPx(7f), dpToPx(7f), fillPaint);
-
-        rectInner.set(cx - dpToPx(2.5f), top + dpToPx(15f), cx + dpToPx(2.5f), bottom - dpToPx(15f));
-        fillPaint.setColor(Color.argb(190, 255, 255, 240));
-        canvas.drawRoundRect(rectInner, dpToPx(2.5f), dpToPx(2.5f), fillPaint);
-
-        // 7. Subtle rhythm node diamonds along the ribbon
-        float headH = tileHeight * 0.70f;
+        // 6. Subtle rhythm node diamonds along the unplayed ribbon
         float nodeY = top + dpToPx(35f);
-        while (nodeY < bottom - headH - dpToPx(15f)) {
+        while (nodeY < activeBottom - headH - dpToPx(15f)) {
             diamondPath.reset();
             diamondPath.moveTo(cx, nodeY - dpToPx(4.5f));
             diamondPath.lineTo(cx + dpToPx(4.5f), nodeY);
@@ -639,9 +745,11 @@ public class GameView extends View {
             nodeY += dpToPx(50f);
         }
 
-        // 8. Leading Head Note Block (at bottom strike edge)
-        float headTop = Math.max(top, bottom - headH);
-        rectInner.set(left, headTop, right, bottom);
+        // 7. Dynamic Head Note Block
+        // When not holding: head note is at [bottom - headH, bottom]
+        // When holding: head note is locked right to the player's finger [activeBottom - headH, activeBottom]!
+        float headTop = Math.max(top, activeBottom - headH);
+        rectInner.set(left, headTop, right, activeBottom);
 
         if (amberShader != null) {
             shaderMatrix.setTranslate(0, headTop);
@@ -655,20 +763,20 @@ public class GameView extends View {
 
         // Head Outer Glow Rim
         rimGlowPaint.setColor(color);
-        rimGlowPaint.setAlpha(240);
-        rimGlowPaint.setStrokeWidth(dpToPx(5f));
+        rimGlowPaint.setAlpha(t.holding ? 255 : 240);
+        rimGlowPaint.setStrokeWidth(dpToPx(t.holding ? 6f : 5f));
         canvas.drawRoundRect(rectInner, r, r, rimGlowPaint);
 
         // Head Primary Neon Rim Frame
-        strokePaint.setColor(color);
+        strokePaint.setColor(t.holding ? Color.WHITE : color);
         strokePaint.setAlpha(255);
         strokePaint.setStrokeWidth(dpToPx(2.8f));
         canvas.drawRoundRect(rectInner, r, r, strokePaint);
 
         // Head Inner Chamfer
-        rect.set(left + inset, headTop + inset, right - inset, bottom - inset);
+        rect.set(left + inset, headTop + inset, right - inset, activeBottom - inset);
         innerStrokePaint.setColor(Color.WHITE);
-        innerStrokePaint.setAlpha(120);
+        innerStrokePaint.setAlpha(125);
         innerStrokePaint.setStrokeWidth(dpToPx(1.3f));
         canvas.drawRoundRect(rect, Math.max(2f, r - inset), Math.max(2f, r - inset), innerStrokePaint);
 
@@ -679,13 +787,13 @@ public class GameView extends View {
 
         // Head Leading Hit Bar
         float barMargin = dpToPx(10f);
-        rect.set(left + barMargin, bottom - dpToPx(7f), right - barMargin, bottom - dpToPx(2.5f));
+        rect.set(left + barMargin, activeBottom - dpToPx(7f), right - barMargin, activeBottom - dpToPx(2.5f));
         fillPaint.setColor(Color.WHITE);
         fillPaint.setAlpha(240);
         canvas.drawRoundRect(rect, dpToPx(2f), dpToPx(2f), fillPaint);
 
         // Head Center Diamond
-        float headCy = (headTop + bottom) / 2f;
+        float headCy = (headTop + activeBottom) / 2f;
         float dSize = dpToPx(7.5f);
         diamondPath.reset();
         diamondPath.moveTo(cx, headCy - dSize);
@@ -696,6 +804,16 @@ public class GameView extends View {
         fillPaint.setColor(Color.WHITE);
         fillPaint.setAlpha(240);
         canvas.drawPath(diamondPath, fillPaint);
+
+        // 8. Electric Contact Plasma Orb under the finger when actively holding
+        if (t.holding) {
+            fillPaint.setColor(Color.argb(90, 255, 255, 255));
+            canvas.drawCircle(cx, activeBottom, dpToPx(18f), fillPaint);
+            fillPaint.setColor(Color.WHITE);
+            canvas.drawCircle(cx, activeBottom, dpToPx(10f), fillPaint);
+            fillPaint.setColor(color);
+            canvas.drawCircle(cx, activeBottom, dpToPx(6f), fillPaint);
+        }
     }
 
     private void glowText(Canvas canvas, String text, float x, float y, float size, int color) {
@@ -719,7 +837,14 @@ public class GameView extends View {
 
         if (running && !gameOver && laneWidth > 0) update(dt);
 
-        // 1. Lane Press Illumination
+        // 1. Ambient Screen Flash on Level Up
+        if (screenFlashAlpha > 0f) {
+            flashPaint.setColor(bannerColor);
+            flashPaint.setAlpha((int)(screenFlashAlpha * 255));
+            canvas.drawRect(0, 0, getWidth(), getHeight(), flashPaint);
+        }
+
+        // 2. Lane Press Illumination
         for (int i = 0; i < LANES; i++) {
             if (lanePress[i] > 0f) {
                 int c = (i == 0 || i == 3) ? CYAN : (i == 1 ? MAGENTA : PURPLE);
@@ -728,12 +853,12 @@ public class GameView extends View {
             }
         }
 
-        // 2. Lane Dividers
+        // 3. Lane Dividers
         for (int i = 1; i < LANES; i++) {
             canvas.drawLine(i * laneWidth, 0, i * laneWidth, getHeight(), linePaint);
         }
 
-        // 3. Judgment Baseline & Target Pads
+        // 4. Judgment Baseline & Target Pads
         float judgeY = getHeight() - tileHeight * 0.85f;
         canvas.drawLine(0, judgeY, getWidth(), judgeY, judgePaint);
 
@@ -748,27 +873,25 @@ public class GameView extends View {
             canvas.drawRoundRect(rectInner, 6f, 6f, strokePaint);
         }
 
-        // 4. Tiles
+        // 5. Tiles
         for (Tile t : tiles) drawTile(canvas, t);
 
-        // 5. Dual Bubble Pop Ripples
+        // 6. Dual Bubble Pop Ripples
         for (HitRipple rip : ripples) {
             float a = Math.max(0f, Math.min(1f, rip.alpha));
-            // Outer bubble ring
             strokePaint.setStyle(Paint.Style.STROKE);
             strokePaint.setColor(rip.color);
             strokePaint.setAlpha((int) (a * 255));
             strokePaint.setStrokeWidth(3.8f * a);
             canvas.drawCircle(rip.x, rip.y, rip.radius, strokePaint);
 
-            // Inner bubble reflection sheen
             strokePaint.setColor(Color.WHITE);
             strokePaint.setAlpha((int) (a * 150));
             strokePaint.setStrokeWidth(1.8f * a);
             canvas.drawCircle(rip.x, rip.y, Math.max(1f, rip.radius - 4f), strokePaint);
         }
 
-        // 6. Sparkling Bubble Droplets
+        // 7. Sparkling Bubble Droplets
         fillPaint.setStyle(Paint.Style.FILL);
         for (HitParticle p : particles) {
             float a = Math.max(0f, Math.min(1f, p.alpha));
@@ -776,13 +899,12 @@ public class GameView extends View {
             fillPaint.setAlpha((int) (a * 240));
             canvas.drawCircle(p.x, p.y, p.size * a, fillPaint);
 
-            // Specular droplet glint
             fillPaint.setColor(Color.WHITE);
             fillPaint.setAlpha((int) (a * 210));
             canvas.drawCircle(p.x - p.size * 0.25f, p.y - p.size * 0.25f, Math.max(1f, p.size * 0.45f * a), fillPaint);
         }
 
-        // 7. Floating Score Popups
+        // 8. Floating Score Popups
         for (HitPopup pop : popups) {
             popupPaint.setColor(pop.color);
             popupPaint.setAlpha((int) (Math.max(0f, Math.min(1f, pop.alpha)) * 255));
@@ -790,9 +912,67 @@ public class GameView extends View {
             canvas.drawText(pop.text, pop.x, pop.y, popupPaint);
         }
 
-        // 8. Score HUD
-        canvas.drawText("SCORE", getWidth() / 2f, dpToPx(30), subTextPaint);
-        glowText(canvas, String.valueOf(score), getWidth() / 2f, dpToPx(78), dpToPx(42), CYAN);
+        // 9. Score HUD & Mode Badge
+        canvas.drawText("SCORE", getWidth() / 2f, dpToPx(28f), subTextPaint);
+        glowText(canvas, String.valueOf(score), getWidth() / 2f, dpToPx(72f), dpToPx(40f), CYAN);
+
+        // Level indicator pill badge below score
+        float badgeW = dpToPx(98f);
+        float badgeH = dpToPx(20f);
+        float badgeY = dpToPx(86f);
+        rectInner.set(getWidth() / 2f - badgeW / 2f, badgeY, getWidth() / 2f + badgeW / 2f, badgeY + badgeH);
+
+        int lvlColor = (currentLevel == 1) ? CYAN : (currentLevel == 2 ? AMBER : Color.rgb(255, 65, 95));
+        String lvlText = (currentLevel == 1) ? "LV.1 NORMAL" : (currentLevel == 2 ? "LV.2 RUSH ⚡" : "LV.3 HARD 🔥");
+
+        fillPaint.setColor(Color.argb(45, Color.red(lvlColor), Color.green(lvlColor), Color.blue(lvlColor)));
+        canvas.drawRoundRect(rectInner, dpToPx(10f), dpToPx(10f), fillPaint);
+
+        strokePaint.setColor(lvlColor);
+        strokePaint.setAlpha(170);
+        strokePaint.setStrokeWidth(dpToPx(1.2f));
+        canvas.drawRoundRect(rectInner, dpToPx(10f), dpToPx(10f), strokePaint);
+
+        levelBadgePaint.setColor(lvlColor);
+        levelBadgePaint.setTextSize(dpToPx(10.5f));
+        canvas.drawText(lvlText, getWidth() / 2f, badgeY + dpToPx(14f), levelBadgePaint);
+
+        // 10. Level Transition Announcement Banner ("SPEED UP!", "OVERDRIVE!")
+        if (bannerTitle != null && bannerTimer > 0f) {
+            float alpha = Math.min(1f, bannerTimer * 2.2f);
+            float bannerY = getHeight() * 0.35f;
+
+            float cardW = getWidth() * 0.84f;
+            float cardH = dpToPx(76f);
+            rectInner.set(getWidth() / 2f - cardW / 2f, bannerY - dpToPx(38f), getWidth() / 2f + cardW / 2f, bannerY + cardH - dpToPx(38f));
+
+            fillPaint.setColor(Color.argb((int)(175 * alpha), 8, 8, 28));
+            canvas.drawRoundRect(rectInner, dpToPx(16f), dpToPx(16f), fillPaint);
+
+            strokePaint.setColor(bannerColor);
+            strokePaint.setAlpha((int)(230 * alpha));
+            strokePaint.setStrokeWidth(dpToPx(2.5f));
+            canvas.drawRoundRect(rectInner, dpToPx(16f), dpToPx(16f), strokePaint);
+
+            // Glowing title
+            bannerTitlePaint.setColor(bannerColor);
+            bannerTitlePaint.setAlpha((int)(255 * alpha));
+            bannerTitlePaint.setTextSize(dpToPx(28f));
+
+            bannerGlowPaint.setColor(bannerColor);
+            bannerGlowPaint.setAlpha((int)(190 * alpha));
+            bannerGlowPaint.setTextSize(dpToPx(28f));
+            bannerGlowPaint.setMaskFilter(new BlurMaskFilter(dpToPx(12f), BlurMaskFilter.Blur.NORMAL));
+
+            canvas.drawText(bannerTitle, getWidth() / 2f, bannerY, bannerGlowPaint);
+            canvas.drawText(bannerTitle, getWidth() / 2f, bannerY, bannerTitlePaint);
+
+            // Subtitle
+            bannerSubPaint.setColor(Color.WHITE);
+            bannerSubPaint.setAlpha((int)(230 * alpha));
+            bannerSubPaint.setTextSize(dpToPx(12f));
+            canvas.drawText(bannerSub, getWidth() / 2f, bannerY + dpToPx(24f), bannerSubPaint);
+        }
 
         if (gameOver) {
             canvas.drawRect(0, 0, getWidth(), getHeight(), overlayPaint);
@@ -831,7 +1011,7 @@ public class GameView extends View {
                         if (t.isHold) {
                             t.holding = true;
                             t.pointerId = e.getPointerId(idx);
-                            t.touchY = Math.max(y, t.y + t.height * 0.8f);
+                            t.touchY = y;
                         }
                     }
                     break;
@@ -839,6 +1019,22 @@ public class GameView extends View {
             }
 
             if (!hit) endGame(null);
+            return true;
+        }
+
+        if (action == MotionEvent.ACTION_MOVE) {
+            if (!gameOver) {
+                int count = e.getPointerCount();
+                for (int i = 0; i < count; i++) {
+                    int pid = e.getPointerId(i);
+                    float py = e.getY(i);
+                    for (Tile t : tiles) {
+                        if (t.holding && t.pointerId == pid) {
+                            t.touchY = py;
+                        }
+                    }
+                }
+            }
             return true;
         }
 
