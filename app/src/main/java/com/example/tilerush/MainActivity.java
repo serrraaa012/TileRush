@@ -37,6 +37,8 @@ public class MainActivity extends AppCompatActivity {
     private GameView gameView;
     private MediaPlayer mediaPlayer;
     private MediaPlayer menuMusic;
+    private MediaPlayer previewPlayer;
+    private int selectedTrackIdx = -1;
     private SoundPool soundPool;
     private int clickSound = 0;
     private FrameLayout root;
@@ -48,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
             R.raw.bg_music4, R.raw.bg_music5, R.raw.bg_music6
     };
     private final String[] trackNames = {
-            "Upbeat", "Chill", "Intense", "Cyber", "Synth", "Overdrive"
+            "Don't Blame Me", "Chanel", "At My Worst", "Faded", "Midnight Kisses", "On The Dance Floor"
     };
     private final int[] trackColors = {
             CYAN, MAGENTA, AMBER, GREEN, PURPLE, CORAL
@@ -242,6 +244,55 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
+    private void playTrackPreview(int trackIdx) {
+        stopTrackPreview();
+        stopMenuMusic();
+        selectedTrackIdx = trackIdx;
+        try {
+            previewPlayer = MediaPlayer.create(this, tracks[trackIdx]);
+            if (previewPlayer != null) {
+                previewPlayer.setLooping(true);
+                float vol = muted ? 0f : 1f;
+                previewPlayer.setVolume(vol, vol);
+                previewPlayer.start();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void stopTrackPreview() {
+        try {
+            if (previewPlayer != null) {
+                if (previewPlayer.isPlaying()) {
+                    previewPlayer.stop();
+                }
+                previewPlayer.release();
+                previewPlayer = null;
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void updateTrackCardState(TextView card, int trackIdx, boolean isSelected) {
+        int color = trackColors[trackIdx];
+        GradientDrawable gd = new GradientDrawable();
+        if (isSelected) {
+            card.setText("▶   " + trackNames[trackIdx].toUpperCase() + "  [PREVIEW]");
+            card.setTextColor(Color.WHITE);
+            gd.setColor(Color.argb(85, Color.red(color), Color.green(color), Color.blue(color)));
+            gd.setStroke(dpToPx(3), Color.WHITE);
+            gd.setCornerRadius(36f);
+            card.setShadowLayer(22f, 0, 0, color);
+        } else {
+            card.setText("♫   " + trackNames[trackIdx].toUpperCase());
+            card.setTextColor(Color.argb(235, 255, 255, 255));
+            gd.setColor(Color.argb(35, Color.red(color), Color.green(color), Color.blue(color)));
+            gd.setStroke(4, color);
+            gd.setCornerRadius(36f);
+            card.setShadowLayer(0, 0, 0, 0);
+        }
+        card.setBackground(gd);
+        card.setPadding(dpToPx(22), dpToPx(10), dpToPx(22), dpToPx(10));
+    }
+
     private void applyMuteState() {
         float gameVol = muted ? 0f : 1f;
         float menuVol = muted ? 0f : 0.85f;
@@ -251,6 +302,9 @@ public class MainActivity extends AppCompatActivity {
             }
             if (menuMusic != null) {
                 menuMusic.setVolume(menuVol, menuVol);
+            }
+            if (previewPlayer != null) {
+                previewPlayer.setVolume(gameVol, gameVol);
             }
             if (gameView != null) {
                 gameView.setMuted(muted);
@@ -295,6 +349,8 @@ public class MainActivity extends AppCompatActivity {
     // ---------- screens ----------
 
     private void showStartMenu() {
+        stopTrackPreview();
+        selectedTrackIdx = -1;
         startMenuMusic();
 
         root.removeAllViews();
@@ -378,6 +434,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showMusicSelect() {
+        stopTrackPreview();
+        selectedTrackIdx = -1;
         startMenuMusic();
 
         root.removeAllViews();
@@ -404,33 +462,76 @@ public class MainActivity extends AppCompatActivity {
         fadeIn(heading, 0);
 
         TextView sub = new TextView(this);
-        sub.setText("CHOOSE YOUR RHYTHM  •  FEEL THE BEAT");
+        sub.setText("TAP TO PREVIEW  •  TAP AGAIN OR PLAY");
         sub.setTextColor(Color.argb(210, 190, 235, 255));
         sub.setTextSize(11f);
         sub.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        sub.setLetterSpacing(0.18f);
+        sub.setLetterSpacing(0.16f);
         sub.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams subP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         subP.topMargin = dpToPx(6);
-        subP.bottomMargin = dpToPx(20);
+        subP.bottomMargin = dpToPx(18);
         col.addView(sub, subP);
         fadeIn(sub, 80);
 
+        TextView[] cardViews = new TextView[tracks.length];
+
+        TextView startBtn = neonButton("▶   START GAME", CYAN, dpToPx(28), dpToPx(12));
+        startBtn.setTextSize(16f);
+        startBtn.setLetterSpacing(0.10f);
+        startBtn.setVisibility(View.GONE);
+        LinearLayout.LayoutParams startP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        startP.topMargin = dpToPx(16);
+
+        startBtn.setOnClickListener(v -> {
+            playClickSound();
+            if (selectedTrackIdx >= 0 && selectedTrackIdx < tracks.length) {
+                startGame(tracks[selectedTrackIdx]);
+            }
+        });
+
         for (int i = 0; i < tracks.length; i++) {
             int idx = i;
-            TextView card = neonButton("♫   " + trackNames[i].toUpperCase(), trackColors[i], dpToPx(28), dpToPx(11));
-            card.setLetterSpacing(0.08f);
+            TextView card = neonButton("♫   " + trackNames[i].toUpperCase(), trackColors[i], dpToPx(22), dpToPx(10));
+            card.setTextSize(16f);
+            card.setLetterSpacing(0.06f);
+            cardViews[i] = card;
+
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            cp.topMargin = dpToPx(10);
+            cp.topMargin = dpToPx(9);
+
             card.setOnClickListener(v -> {
                 playClickSound();
-                startGame(tracks[idx]);
+                if (selectedTrackIdx == idx) {
+                    startGame(tracks[idx]);
+                } else {
+                    playTrackPreview(idx);
+                    for (int k = 0; k < tracks.length; k++) {
+                        updateTrackCardState(cardViews[k], k, k == idx);
+                    }
+                    startBtn.setText("▶   PLAY " + trackNames[idx].toUpperCase());
+                    int c = trackColors[idx];
+                    GradientDrawable startGd = new GradientDrawable();
+                    startGd.setColor(Color.argb(80, Color.red(c), Color.green(c), Color.blue(c)));
+                    startGd.setStroke(dpToPx(3), c);
+                    startGd.setCornerRadius(36f);
+                    startBtn.setBackground(startGd);
+                    startBtn.setPadding(dpToPx(28), dpToPx(12), dpToPx(28), dpToPx(12));
+                    if (startBtn.getVisibility() != View.VISIBLE) {
+                        startBtn.setVisibility(View.VISIBLE);
+                        fadeIn(startBtn, 0);
+                        pulse(startBtn);
+                    }
+                }
             });
             col.addView(card, cp);
-            fadeIn(card, 100 + i * 40);
+            fadeIn(card, 100 + i * 35);
         }
+
+        col.addView(startBtn, startP);
 
         TextView back = new TextView(this);
         back.setText("←   BACK TO TITLE");
@@ -449,9 +550,11 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout.LayoutParams backP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        backP.topMargin = dpToPx(22);
+        backP.topMargin = dpToPx(16);
         back.setOnClickListener(v -> {
             playClickSound();
+            stopTrackPreview();
+            selectedTrackIdx = -1;
             showStartMenu();
         });
         col.addView(back, backP);
@@ -468,7 +571,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startGame(int trackRes) {
+        stopTrackPreview();
         stopMenuMusic();
+        selectedTrackIdx = -1;
 
         mediaPlayer = MediaPlayer.create(this, trackRes);
         if (mediaPlayer == null) {
@@ -617,6 +722,12 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         if (gameView != null && !gameView.isGameOver()) {
             gameView.resume();
+        } else if (previewPlayer != null) {
+            try {
+                if (!previewPlayer.isPlaying() && !muted) {
+                    previewPlayer.start();
+                }
+            } catch (Exception ignored) {}
         } else {
             startMenuMusic();
         }
@@ -629,6 +740,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             if (mediaPlayer != null && mediaPlayer.isPlaying()) mediaPlayer.pause();
             if (menuMusic != null && menuMusic.isPlaying()) menuMusic.pause();
+            if (previewPlayer != null && previewPlayer.isPlaying()) previewPlayer.pause();
         } catch (Exception ignored) {}
     }
 
@@ -636,6 +748,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (gameView != null) gameView.release();
+        stopTrackPreview();
         try {
             if (mediaPlayer != null) {
                 mediaPlayer.release();

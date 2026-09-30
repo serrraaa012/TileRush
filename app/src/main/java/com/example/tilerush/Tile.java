@@ -10,6 +10,7 @@ public class Tile {
     public boolean completed;  // hold finished successfully
     public int pointerId = -1; // which finger is holding it
     public float touchY;       // screen line the tile's tail must reach
+    public float tapAnim = 0f; // animation progress after tap: 0 to 1
 
     public Tile(int lane, float y, float height, boolean isHold) {
         this.lane = lane;

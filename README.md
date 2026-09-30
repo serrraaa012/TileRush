@@ -24,8 +24,9 @@
   * **Adaptive Velocity Scaling**: Note fall speed scales dynamically with your score, intensifying the challenge as your combo grows.
 * 🎵 **Low-Latency Dual-Audio Architecture**:
   * **SoundPool Engine**: Instantaneous, zero-lag sound effects for tile taps, wrong-tap error buzzes, and UI button clicks.
-  * **MediaPlayer Streaming**: Multi-track soundtrack selector (*Upbeat*, *Chill*, *Intense*) with automatic looping and instant rewind (`seekTo(0)`) on game restart.
-  * **Ambient Menu Theme**: Soft ambient music (`tilerush_theme`) looping throughout the Start Menu, Track Select, and Game Over screens.
+  * **Interactive Soundtrack Preview**: Tap any track to audition high-fidelity audio snippets directly in the selection menu before starting a run.
+  * **Multi-Track Library**: 6 selectable rhythm tracks (*Don't Blame Me*, *Chanel*, *At My Worst*, *Faded*, *Midnight Kisses*, *On The Dance Floor*) with looping and instant rewind (`seekTo(0)`) on restart.
+  * **Ambient Menu Theme**: Soft ambient music (`tilerush_theme`) looping seamlessly throughout the Start Menu, Track Select, and Game Over screens.
 * 🎨 **Cyberpunk & Synthwave Visuals**:
   * High-contrast dark navy gradient background (`#0A0A22` to `#381270`).
   * Two-tone glowing typography (Electric Cyan `#00E1FF` & Neon Magenta `#FF46C8`).
@@ -49,9 +50,12 @@ TileRush/
 │   │   └── Tile.java             # Lane positioning, dimensions, hold states & completion flags
 │   └── res/
 │       ├── raw/
-│       │   ├── bg_music1.mp3     # "Upbeat" game track
-│       │   ├── bg_music2.mp3     # "Chill" game track
-│       │   ├── bg_music3.mp3     # "Intense" game track
+│       │   ├── bg_music1.mp3     # "Don't Blame Me" game track
+│       │   ├── bg_music2.mp3     # "Chanel" game track
+│       │   ├── bg_music3.mp3     # "At My Worst" game track
+│       │   ├── bg_music4.mp3     # "Faded" game track
+│       │   ├── bg_music5.mp3     # "Midnight Kisses" game track
+│       │   ├── bg_music6.mp3     # "On The Dance Floor" game track
 │       │   ├── tilerush_theme.mp3# Soft ambient menu theme
 │       │   ├── tap.wav           # Low-latency tile tap sound effect
 │       │   ├── button_click.mp3  # UI button click sound effect
