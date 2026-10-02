@@ -268,6 +268,28 @@ public class GameView extends View {
 
     public void pause() {
         running = false;
+        for (Tile t : tiles) {
+            if (t.holding) {
+                t.holding = false;
+            }
+        }
+        try {
+            if (bgMusic != null && bgMusic.isPlaying()) {
+                bgMusic.pause();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public boolean isRunning() {
+        return running;
+    }
+
+    public boolean isPaused() {
+        return !running && !gameOver;
+    }
+
+    public int getScore() {
+        return score;
     }
 
     public void restartFromOutside() {
@@ -983,11 +1005,12 @@ public class GameView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
+        if (gameOver || !running) return true;
+
         int action = e.getActionMasked();
         int idx = e.getActionIndex();
 
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-            if (gameOver) return true;
 
             float x = e.getX(idx);
             float y = e.getY(idx);

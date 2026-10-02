@@ -1,94 +1,128 @@
 # ⚡ TileRush
 
-> **A high-speed, neon-infused 4-lane rhythm mobile game built natively in pure Java for Android.**
-
-![Platform](https://img.shields.io/badge/Platform-Android_8.0+_(API_26+)-3DDC84?logo=android&logoColor=white)
-![Language](https://img.shields.io/badge/Language-Pure_Java-ED8B00?logo=openjdk&logoColor=white)
-![Build](https://img.shields.io/badge/Build-Gradle_8.13-02303A?logo=gradle&logoColor=white)
-![Engine](https://img.shields.io/badge/Engine-Zero_Engine_(Native_Canvas)-FF46C8)
-![License](https://img.shields.io/badge/License-MIT-00E1FF)
+> A high-energy, neon-themed Android rhythm game built from scratch in pure Java — featuring dynamic speed scaling, responsive hold tiles, and pulse-pounding zigzag transitions.
 
 ---
 
-## 🎮 Overview
+## 🎮 About The Project
 
-**TileRush** is an arcade rhythm mobile game engineered from the ground up without heavy third-party game engines (no Unity, Unreal, or Godot). Built entirely in **pure Java** leveraging Android's native **Canvas API**, **ObjectAnimator**, and hardware-accelerated dual audio pipelines, TileRush delivers responsive 60 FPS gameplay, tactile audio feedback, and a striking cyberpunk aesthetic.
+**TileRush** is a fast-paced 4-lane mobile rhythm game inspired by arcade classics like *Magic Tiles* and *Piano Tiles*. 
+
+Instead of relying on heavy third-party game engines (like Unity or Unreal), TileRush is engineered **100% natively using Android's 2D Canvas and pure Java**. It delivers locked 60+ FPS performance, zero-latency touch inputs, fluid bubble pop physics, and an electrifying neon aesthetic.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-* 🎹 **Dynamic Rhythm Mechanics**:
-  * **Short Tap Tiles**: Rapid-fire single taps for quick reflexes (+1 score).
-  * **Sustained Hold Tiles**: Long multi-row notes requiring continuous press and hold until the tail finishes (+2 bonus score).
-  * **Adaptive Velocity Scaling**: Note fall speed scales dynamically with your score, intensifying the challenge as your combo grows.
-* 🎵 **Low-Latency Dual-Audio Architecture**:
-  * **SoundPool Engine**: Instantaneous, zero-lag sound effects for tile taps, wrong-tap error buzzes, and UI button clicks.
-  * **Interactive Soundtrack Preview**: Tap any track to audition high-fidelity audio snippets directly in the selection menu before starting a run.
-  * **Multi-Track Library**: 6 selectable rhythm tracks (*Don't Blame Me*, *Chanel*, *At My Worst*, *Faded*, *Midnight Kisses*, *On The Dance Floor*) with looping and instant rewind (`seekTo(0)`) on restart.
-  * **Ambient Menu Theme**: Soft ambient music (`tilerush_theme`) looping seamlessly throughout the Start Menu, Track Select, and Game Over screens.
-* 🎨 **Cyberpunk & Synthwave Visuals**:
-  * High-contrast dark navy gradient background (`#0A0A22` to `#381270`).
-  * Two-tone glowing typography (Electric Cyan `#00E1FF` & Neon Magenta `#FF46C8`).
-  * Real-time glow bloom shaders powered by Android's `BlurMaskFilter`.
-  * Ambient floating neon decor particles with sinusoidal hovering animations.
-* 🏆 **Arcade High Score Persistence**:
-  * Local high scores are automatically preserved across sessions using Android's lightweight `SharedPreferences`.
-  * Dynamic high-score celebration badge on Game Over.
-* 🔊 **Master Audio Controls**:
-  * Persistent one-touch mute toggle in the HUD to silence gameplay OST, menu themes, and sound effects.
+- **🎧 Interactive Music Jukebox with Live Previews:**
+  Preview songs in real time before jumping into a round. Featured tracks:
+  - *On The Dance Floor*
+  - *Midnight Kisses*
+  - *Faded*
+  - *Chanel*
+  - *Don't Blame Me*
+  - *At My Worst*
+
+- **⚡ 3-Tier Dynamic Difficulty Progression:**
+  - **Level 1 (Groove / Normal | Score 0–29):** Balanced tempo to build rhythm and confidence.
+  - **Level 2 (Rush / Speed Up | Score 30–69):** Triggered with an animated screen flash and a glowing `"⚡ SPEED UP! ⚡"` announcement card with accelerated tempo.
+  - **Level 3 (Overdrive / Hard | Score 70+):** Unleashed with a fiery amber screen flash and `"🔥 OVERDRIVE! 🔥"` banner at blistering speeds.
+
+- **🌀 Zigzag Tile Storms:**
+  In Overdrive mode, rapid 7-note staircase waves sweep across adjacent lanes (`0 ➔ 1 ➔ 2 ➔ 3 ➔ 2 ➔ 1 ➔ 0`), testing reflexes and precision.
+
+- **🎵 Dynamic Hold Tiles with Real-Time Finger Tracking:**
+  Hold tiles feature continuous finger position tracking (`touchY`). The glowing head note block stays pinned directly beneath your contact point while the incoming tail flows smoothly into it with plasma ripples and bubble bursts.
+
+- **🫧 Satisfying Visual Feedback:**
+  - Glassmorphic neon-bordered tiles with bevel lighting.
+  - Interactive bubble pops and particle explosion effects on tap.
+  - Ambient floating background dust motes.
+  - Real-time HUD badges displaying your current difficulty mode and personal high score.
 
 ---
 
 ## 🛠️ Tech Stack & Architecture
 
-TileRush/
-├── app/src/main/
-│   ├── java/com/example/tilerush/
-│   │   ├── MainActivity.java     # Screen orchestration, menus, high scores, lifecycle & audio routing
-│   │   ├── GameView.java         # 60 FPS Canvas game loop, input dispatch, hold tracking & collision
-│   │   └── Tile.java             # Lane positioning, dimensions, hold states & completion flags
-│   └── res/
-│       ├── raw/
-│       │   ├── bg_music1.mp3     # "Don't Blame Me" game track
-│       │   ├── bg_music2.mp3     # "Chanel" game track
-│       │   ├── bg_music3.mp3     # "At My Worst" game track
-│       │   ├── bg_music4.mp3     # "Faded" game track
-│       │   ├── bg_music5.mp3     # "Midnight Kisses" game track
-│       │   ├── bg_music6.mp3     # "On The Dance Floor" game track
-│       │   ├── tilerush_theme.mp3# Soft ambient menu theme
-│       │   ├── tap.wav           # Low-latency tile tap sound effect
-│       │   ├── button_click.mp3  # UI button click sound effect
-│       │   └── error.mp3         # Missed / wrong-tap error buzzer
-│       └── values/
-│           ├── colors.xml
-│           └── strings.xml
+| Component | Technology |
+| :--- | :--- |
+| **Language** | Pure Java (JDK 17) |
+| **Platform** | Native Android SDK (Min SDK: API 26 / Android 8.0 Oreo) |
+| **Rendering** | Custom Android 2D `Canvas` & `SurfaceView` double-buffered game loop (60 FPS) |
+| **Audio Engine** | Dual-channel: `MediaPlayer` (soundtrack & previews) + `SoundPool` (zero-latency SFX) |
+| **Touch Handling** | Multi-touch event dispatcher (`ACTION_DOWN`, `ACTION_MOVE`, `ACTION_UP`) |
+| **Build System** | Gradle with Android Gradle Plugin (AGP 8.x) |
 
 ---
 
-## Core Technologies
-Language: Java 17
-Android Target SDK: API 34 (UpsideDownCake)
-Minimum SDK: API 26 (Android 8.0 Oreo)
-Graphics: Hardware-accelerated android.graphics.Canvas with custom Paint shaders
-Audio Pipelines: android.media.SoundPool (SFX) + android.media.MediaPlayer (BGM / OST)
-UI & Animation: Native Android View Hierarchy + ObjectAnimator + ValueAnimator
+## 📂 Project Structure
+
+```text
+TileRush/
+├── app/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/example/tilerush/
+│   │   │   │   ├── MainActivity.java    # Jukebox song selection, audio preview lifecycle & UI
+│   │   │   │   ├── GameActivity.java    # Host activity managing full-screen gameplay window
+│   │   │   │   ├── GameView.java        # 60 FPS Canvas loop, particle physics, touch tracking & level state machine
+│   │   │   │   ├── Tile.java            # Tile model, lane data, hold-state tracking & tap animations
+│   │   │   │   └── SoundManager.java    # SoundPool audio manager for low-latency tap SFX
+│   │   │   └── res/                     # Layouts, audio files (raw/), and neon drawable vector assets
+│   └── build.gradle                     # Module build configuration
+└── build.gradle                         # Root project configuration
+```
 
 ---
 
 ## 🚀 Getting Started
 
-**Prerequisites**
-Android Studio
-(Hedgehog, Ladybug, Meerkat or newer)
-JDK 17+
-Android device or emulator running Android 8.0 (API 26) or higher
+### Prerequisites
+- [Android Studio](https://developer.android.com/studio) (Koala / Ladybug / Meerkat or newer recommended)
+- JDK 17+
+- Android Device or Emulator running **Android 8.0 (API 26)** or higher
+
+### Installation & Run
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/TileRush.git
+   cd TileRush
+   ```
+
+2. **Open in Android Studio:**
+   - Launch Android Studio.
+   - Select **Open an Existing Project** and navigate to the cloned `TileRush` directory.
+   - Let Gradle sync dependencies.
+
+3. **Build the APK:**
+   ```bash
+   ./gradlew assembleDebug
+   ```
+
+4. **Run on Device / Emulator:**
+   - Connect your Android device via USB (with USB Debugging enabled) or start an AVD emulator.
+   - Press the **Run** button (`Shift + F10`) in Android Studio.
 
 ---
 
-## Installation & Run
+## 🎯 Gameplay Controls
 
-**Clone the repository:**
-bash
-git clone https://github.com/serrraaa012/TileRush.git
-cd TileRush
+- **Single Tap Tile:** Tap the falling neon tile before it reaches the bottom boundary.
+- **Hold Tile:** Press and hold down on the tile's head note block. Keep your finger held as the note tail drains into your finger, then release when finished.
+- **Miss Penalty:** Tapping an empty lane or letting a tile drop off the bottom triggers Game Over.
+
+---
+
+## 🔮 Roadmap / Future Improvements
+
+- [ ] Custom Beatmap Generator: Automatically generate playable rhythm tiles from user-imported MP3 files.
+- [ ] 1v1 Real-Time Multiplayer Battle Mode.
+- [ ] Global Online Leaderboards with Firebase.
+- [ ] Custom haptic vibration feedback on note hits.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE) — free to use, modify, and distribute.

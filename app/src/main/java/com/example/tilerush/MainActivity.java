@@ -44,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout root;
     private Typeface titleFont;
     private boolean muted = false;
+    private TextView pauseBtn;
+    private boolean isPaused = false;
+    private FrameLayout pauseOverlay;
+    private TextView pauseScoreDisplay;
 
     private final int[] tracks = {
             R.raw.bg_music1, R.raw.bg_music2, R.raw.bg_music3,
@@ -346,6 +350,109 @@ public class MainActivity extends AppCompatActivity {
         parent.addView(buildMuteButton(), muteP);
     }
 
+    private TextView buildPauseButton() {
+        TextView btn = new TextView(this);
+        btn.setText(isPaused ? "▶" : "⏸");
+        btn.setTextSize(20f);
+        btn.setTextColor(Color.WHITE);
+        btn.setGravity(Gravity.CENTER);
+        btn.setPadding(24, 24, 24, 24);
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(Color.argb(50, 255, 255, 255));
+        gd.setStroke(3, isPaused ? AMBER : CYAN);
+        gd.setShape(GradientDrawable.OVAL);
+        btn.setBackground(gd);
+        btn.setOnClickListener(v -> {
+            playClickSound();
+            togglePause();
+        });
+        return btn;
+    }
+
+    private void addGameControls(FrameLayout parent) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        pauseBtn = buildPauseButton();
+        LinearLayout.LayoutParams pauseLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        pauseLp.rightMargin = dpToPx(12);
+        row.addView(pauseBtn, pauseLp);
+
+        TextView muteBtn = buildMuteButton();
+        row.addView(muteBtn);
+
+        FrameLayout.LayoutParams rowP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.END);
+        rowP.topMargin = 60;
+        rowP.rightMargin = 40;
+        parent.addView(row, rowP);
+    }
+
+    private void pauseGame() {
+        if (gameView == null || gameView.isGameOver() || isPaused) return;
+        isPaused = true;
+        gameView.pause();
+        try {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                mediaPlayer.pause();
+            }
+        } catch (Exception ignored) {}
+
+        if (pauseBtn != null) {
+            pauseBtn.setText("▶");
+            GradientDrawable gd = new GradientDrawable();
+            gd.setColor(Color.argb(60, 255, 255, 255));
+            gd.setStroke(3, AMBER);
+            gd.setShape(GradientDrawable.OVAL);
+            pauseBtn.setBackground(gd);
+        }
+
+        if (pauseOverlay != null) {
+            if (pauseScoreDisplay != null) {
+                pauseScoreDisplay.setText("CURRENT SCORE: " + gameView.getScore());
+            }
+            pauseOverlay.setVisibility(View.VISIBLE);
+            pauseOverlay.bringToFront();
+            fadeIn(pauseOverlay, 0);
+        }
+    }
+
+    private void resumeGame() {
+        if (gameView == null || gameView.isGameOver() || !isPaused) return;
+        isPaused = false;
+
+        if (pauseOverlay != null) {
+            pauseOverlay.setVisibility(View.GONE);
+        }
+
+        if (pauseBtn != null) {
+            pauseBtn.setText("⏸");
+            GradientDrawable gd = new GradientDrawable();
+            gd.setColor(Color.argb(50, 255, 255, 255));
+            gd.setStroke(3, CYAN);
+            gd.setShape(GradientDrawable.OVAL);
+            pauseBtn.setBackground(gd);
+        }
+
+        gameView.resume();
+        try {
+            if (mediaPlayer != null && !mediaPlayer.isPlaying() && !muted) {
+                mediaPlayer.start();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void togglePause() {
+        if (isPaused) {
+            resumeGame();
+        } else {
+            pauseGame();
+        }
+    }
+
     // ---------- screens ----------
 
     private void showStartMenu() {
@@ -574,6 +681,7 @@ public class MainActivity extends AppCompatActivity {
         stopTrackPreview();
         stopMenuMusic();
         selectedTrackIdx = -1;
+        isPaused = false;
 
         mediaPlayer = MediaPlayer.create(this, trackRes);
         if (mediaPlayer == null) {
@@ -591,7 +699,96 @@ public class MainActivity extends AppCompatActivity {
         gameFrame.addView(gameView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-        addMuteButton(gameFrame);
+        addGameControls(gameFrame);
+
+        // --- Centered Pause Card Overlay ---
+        pauseOverlay = new FrameLayout(this);
+        pauseOverlay.setBackgroundColor(Color.argb(195, 8, 8, 28));
+        pauseOverlay.setVisibility(View.GONE);
+        pauseOverlay.setClickable(true);
+        pauseOverlay.setFocusable(true);
+
+        LinearLayout pauseCard = new LinearLayout(this);
+        pauseCard.setOrientation(LinearLayout.VERTICAL);
+        pauseCard.setGravity(Gravity.CENTER);
+        pauseCard.setPadding(dpToPx(28), dpToPx(32), dpToPx(28), dpToPx(32));
+
+        GradientDrawable pauseCardBg = new GradientDrawable();
+        pauseCardBg.setColor(Color.argb(245, 14, 12, 38));
+        pauseCardBg.setStroke(dpToPx(2), CYAN);
+        pauseCardBg.setCornerRadius(dpToPx(24));
+        pauseCard.setBackground(pauseCardBg);
+        pauseCard.setElevation(dpToPx(16));
+
+        TextView pauseTitle = glowText("PAUSED", 36f, CYAN);
+        pauseTitle.setLetterSpacing(0.14f);
+        pauseCard.addView(pauseTitle);
+
+        pauseScoreDisplay = new TextView(this);
+        pauseScoreDisplay.setTextColor(Color.argb(230, 255, 255, 255));
+        pauseScoreDisplay.setTextSize(15f);
+        pauseScoreDisplay.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        pauseScoreDisplay.setLetterSpacing(0.12f);
+        pauseScoreDisplay.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams pscP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        pscP.topMargin = dpToPx(10);
+        pscP.bottomMargin = dpToPx(26);
+        pauseCard.addView(pauseScoreDisplay, pscP);
+
+        // Resume Button
+        TextView resumeBtn = neonButton("▶   RESUME", CYAN, dpToPx(36), dpToPx(13));
+        resumeBtn.setLetterSpacing(0.12f);
+        resumeBtn.setOnClickListener(v -> {
+            playClickSound();
+            resumeGame();
+        });
+        pauseCard.addView(resumeBtn);
+
+        // Restart Button
+        TextView pauseRestartBtn = neonButton("↺   RESTART", AMBER, dpToPx(32), dpToPx(12));
+        pauseRestartBtn.setTextSize(16f);
+        pauseRestartBtn.setLetterSpacing(0.10f);
+        LinearLayout.LayoutParams rstP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rstP.topMargin = dpToPx(14);
+        pauseRestartBtn.setOnClickListener(v -> {
+            playClickSound();
+            resumeGame();
+            gameView.restartFromOutside();
+        });
+        pauseCard.addView(pauseRestartBtn, rstP);
+
+        // Exit to Menu Button
+        TextView pauseQuitBtn = neonButton("EXIT TO MENU", MAGENTA, dpToPx(28), dpToPx(12));
+        pauseQuitBtn.setTextSize(15f);
+        pauseQuitBtn.setLetterSpacing(0.10f);
+        LinearLayout.LayoutParams quitP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        quitP.topMargin = dpToPx(14);
+        pauseQuitBtn.setOnClickListener(v -> {
+            playClickSound();
+            isPaused = false;
+            try {
+                if (mediaPlayer != null) {
+                    mediaPlayer.stop();
+                    mediaPlayer.release();
+                    mediaPlayer = null;
+                }
+            } catch (Exception ignored) {}
+            if (gameView != null) {
+                gameView.release();
+                gameView = null;
+            }
+            showStartMenu();
+        });
+        pauseCard.addView(pauseQuitBtn, quitP);
+
+        FrameLayout.LayoutParams pauseCardParams = new FrameLayout.LayoutParams(
+                dpToPx(270), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        pauseOverlay.addView(pauseCard, pauseCardParams);
+        gameFrame.addView(pauseOverlay, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         // --- Centered Unified Game Over Card ---
         LinearLayout gameOverCard = new LinearLayout(this);
@@ -675,6 +872,10 @@ public class MainActivity extends AppCompatActivity {
         gameView.listener = new GameView.Listener() {
             @Override
             public void onGameOver(int score) {
+                if (pauseBtn != null) pauseBtn.setVisibility(View.GONE);
+                if (pauseOverlay != null) pauseOverlay.setVisibility(View.GONE);
+                isPaused = false;
+
                 boolean isHigh = updateHighScore(score);
                 // Allow error sound to punch through, then resume soft ambient menu theme
                 gameFrame.postDelayed(() -> {
@@ -708,6 +909,17 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onRestart() {
+                isPaused = false;
+                if (pauseBtn != null) {
+                    pauseBtn.setVisibility(View.VISIBLE);
+                    pauseBtn.setText("⏸");
+                    GradientDrawable gd = new GradientDrawable();
+                    gd.setColor(Color.argb(50, 255, 255, 255));
+                    gd.setStroke(3, CYAN);
+                    gd.setShape(GradientDrawable.OVAL);
+                    pauseBtn.setBackground(gd);
+                }
+                if (pauseOverlay != null) pauseOverlay.setVisibility(View.GONE);
                 stopMenuMusic();
                 gameFrame.post(() -> gameOverCard.setVisibility(View.GONE));
             }
@@ -721,7 +933,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         if (gameView != null && !gameView.isGameOver()) {
-            gameView.resume();
+            if (!isPaused) {
+                gameView.resume();
+            }
         } else if (previewPlayer != null) {
             try {
                 if (!previewPlayer.isPlaying() && !muted) {
@@ -736,7 +950,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (gameView != null) gameView.pause();
+        if (gameView != null && !gameView.isGameOver() && !isPaused) {
+            pauseGame();
+        } else {
+            if (gameView != null) gameView.pause();
+        }
         try {
             if (mediaPlayer != null && mediaPlayer.isPlaying()) mediaPlayer.pause();
             if (menuMusic != null && menuMusic.isPlaying()) menuMusic.pause();
