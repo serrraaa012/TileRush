@@ -553,7 +553,7 @@ public class GameView extends View {
                             if (!muted) bgMusic.start();
                         }
                     } catch (Exception ignored) {}
-                    triggerLevelTransition("SPEED UP!", "PART 2 • 1.25x TEMPO & LYRICS", CYAN);
+                    triggerLevelTransition("SPEED UP!", "LEVEL 2 • 1.25x TEMPO & LYRICS", CYAN);
                 } else if (breakPartCompleted == 2) {
                     currentLevel = 3;
                     try {
@@ -563,25 +563,30 @@ public class GameView extends View {
                             if (!muted) bgMusic.start();
                         }
                     } catch (Exception ignored) {}
-                    triggerLevelTransition("OVERDRIVE!", "FINAL ROUND • 1.45x TEMPO & ZIGZAG", Color.rgb(255, 65, 95));
+                    triggerLevelTransition("OVERDRIVE!", "LEVEL 3 • 1.45x TEMPO & ZIGZAG", Color.rgb(255, 65, 95));
                 }
             }
             return;
         }
 
-        // 3. Full Song Progress Check: stop spawning ~2.2s before the full song finishes
+        // 3. Round Duration Check (2-Minute Cap or Song Completion):
+        // Each round plays for up to 2 minutes (120,000 ms), or until song finishes if shorter.
+        // Stop spawning ~2.2s before the threshold so player clears remaining falling tiles.
         int songDur = getSongDuration();
         int songPos = getSongPosition();
-        if (songDur > 5000 && spawningAllowed) {
+        int targetRoundDuration = (songDur > 5000) ? Math.min(songDur, 120_000) : 120_000;
+        if (spawningAllowed) {
             int leadTimeMs = (int) (2200 / levelAudioSpeed);
-            if (songPos >= songDur - leadTimeMs || songEnded) {
+            if (songPos >= targetRoundDuration - leadTimeMs || songEnded) {
                 spawningAllowed = false; // Stop spawning so player clears the remaining tiles
             }
         }
 
-        // 4. When all remaining tiles of the round are tapped and cleared, and song has completed:
-        boolean isSongDone = songEnded || (songDur > 5000 && songPos >= songDur - 350) || (!bgMusic.isPlaying() && songPos > 5000);
-        if (!spawningAllowed && tiles.isEmpty() && !inBreak && isSongDone) {
+        // 4. When all remaining tiles of the round are tapped and cleared, and 2 minutes or song completed:
+        boolean isRoundDone = songEnded || (songPos >= targetRoundDuration - 350)
+                || (songDur > 5000 && songPos >= songDur - 350)
+                || (bgMusic != null && !bgMusic.isPlaying() && songPos > 5000);
+        if (!spawningAllowed && tiles.isEmpty() && !inBreak && isRoundDone) {
             if (currentLevel == 1) {
                 inBreak = true;
                 breakTimer = 3.6f;
@@ -1074,25 +1079,16 @@ public class GameView extends View {
         glowText(canvas, String.valueOf(score), getWidth() / 2f, dpToPx(72f), dpToPx(40f), CYAN);
 
         // Level indicator pill badge below score
-        float badgeW = dpToPx(inBreak ? 140f : (currentLevel == 3 ? 160f : 125f));
+        float badgeW = dpToPx(inBreak ? 130f : 98f);
         float badgeH = dpToPx(20f);
         float badgeY = dpToPx(86f);
         rectInner.set(getWidth() / 2f - badgeW / 2f, badgeY, getWidth() / 2f + badgeW / 2f, badgeY + badgeH);
 
-        int lvlColor;
-        String lvlText;
+        int lvlColor = (currentLevel == 1) ? CYAN : (currentLevel == 2 ? AMBER : Color.rgb(255, 65, 95));
+        String lvlText = (currentLevel == 1) ? "LV.1 NORMAL" : (currentLevel == 2 ? "LV.2 RUSH ⚡" : "LV.3 HARD 🔥");
         if (inBreak) {
             lvlColor = AMBER;
-            lvlText = (breakPartCompleted == 1) ? "PART 1 CLEAR ☕" : "PART 2 CLEAR ☕";
-        } else if (currentLevel == 1) {
-            lvlColor = CYAN;
-            lvlText = "PART 1 • 1.0x NORMAL";
-        } else if (currentLevel == 2) {
-            lvlColor = CYAN;
-            lvlText = "PART 2 • 1.25x RUSH ⚡";
-        } else {
-            lvlColor = Color.rgb(255, 65, 95);
-            lvlText = "FINAL ROUND • 1.45x OVERDRIVE 🔥";
+            lvlText = (breakPartCompleted == 1) ? "ROUND 1 CLEAR ☕" : "ROUND 2 CLEAR ☕";
         }
 
         fillPaint.setColor(Color.argb(45, Color.red(lvlColor), Color.green(lvlColor), Color.blue(lvlColor)));
@@ -1166,14 +1162,14 @@ public class GameView extends View {
             canvas.drawRoundRect(rectInner, dpToPx(20f), dpToPx(20f), strokePaint);
 
             // Title
-            String roundTitle = (breakPartCompleted == 1) ? "PART 1 COMPLETE!" : "PART 2 COMPLETE!";
+            String roundTitle = (breakPartCompleted == 1) ? "LEVEL 1 COMPLETE!" : "LEVEL 2 COMPLETE!";
             bannerTitlePaint.setColor(themeColor);
             bannerTitlePaint.setAlpha((int)(255 * breakAlpha));
             bannerTitlePaint.setTextSize(dpToPx(23f));
             canvas.drawText(roundTitle, getWidth() / 2f, cardY - dpToPx(34f), bannerTitlePaint);
 
             // Subtitle
-            String nextMode = (breakPartCompleted == 1) ? "FULL SONG CLEARED • SPEEDING UP NEXT" : "1.25x SONG CLEARED • FINAL ROUND AHEAD";
+            String nextMode = (breakPartCompleted == 1) ? "TAKE A BREATH • LEVEL 2 SPEEDING UP" : "AWESOME WORK • FINAL LEVEL 3 AHEAD";
             bannerSubPaint.setColor(Color.argb((int)(220 * breakAlpha), 210, 235, 255));
             bannerSubPaint.setTextSize(dpToPx(11f));
             canvas.drawText(nextMode, getWidth() / 2f, cardY - dpToPx(12f), bannerSubPaint);
