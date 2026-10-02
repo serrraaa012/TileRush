@@ -13,7 +13,9 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.media.PlaybackParams;
 import android.media.SoundPool;
+import android.os.Build;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -109,12 +111,14 @@ public class GameView extends View {
     private boolean gameOver = false;
     private Tile missedTile = null;
 
-    // Levels & transitions
-    public static final int LEVEL_1_TARGET = 30; // Part 1 ends at score 30
-    public static final int LEVEL_2_TARGET = 65; // Part 2 ends at score 65
+    // Levels & transitions (Full Song Rounds with Accelerated Lyrics/Vocals)
+    public static final float SPEED_LVL1 = 1.0f;
+    public static final float SPEED_LVL2 = 1.25f;
+    public static final float SPEED_LVL3 = 1.45f;
 
-    private int currentLevel = 1; // 1 = Normal, 2 = Rush, 3 = Hard (Zigzag)
+    private int currentLevel = 1; // 1 = Normal (1.0x), 2 = Rush (1.25x), 3 = Hard (1.45x + Zigzag)
     private boolean spawningAllowed = true;
+    private boolean songEnded = false;
     private boolean inBreak = false;
     private float breakTimer = 0f;
     private int breakPartCompleted = 0; // 1 = Part 1 ended, 2 = Part 2 ended
@@ -133,6 +137,14 @@ public class GameView extends View {
     public GameView(Context context, MediaPlayer bgMusic) {
         super(context);
         this.bgMusic = bgMusic;
+        if (this.bgMusic != null) {
+            try {
+                this.bgMusic.setOnCompletionListener(mp -> {
+                    songEnded = true;
+                    spawningAllowed = false;
+                });
+            } catch (Exception ignored) {}
+        }
         setLayerType(View.LAYER_TYPE_SOFTWARE, null);
 
         strokePaint.setStyle(Paint.Style.STROKE);
@@ -269,8 +281,48 @@ public class GameView extends View {
     public void resume() {
         running = true;
         lastTime = 0;
-        if (bgMusic != null && !bgMusic.isPlaying()) bgMusic.start();
+        if (!inBreak && bgMusic != null && !bgMusic.isPlaying() && !muted) {
+            bgMusic.start();
+        }
         postInvalidateOnAnimation();
+    }
+
+    public void setMusicSpeed(float speed) {
+        if (bgMusic == null) return;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PlaybackParams params = bgMusic.getPlaybackParams();
+                if (params == null) params = new PlaybackParams();
+                params.setSpeed(speed);
+                bgMusic.setPlaybackParams(params);
+            }
+        } catch (Exception e) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PlaybackParams params = new PlaybackParams();
+                    params.setSpeed(speed);
+                    bgMusic.setPlaybackParams(params);
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    public int getSongDuration() {
+        try {
+            if (bgMusic != null) {
+                return bgMusic.getDuration();
+            }
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
+    public int getSongPosition() {
+        try {
+            if (bgMusic != null) {
+                return bgMusic.getCurrentPosition();
+            }
+        } catch (Exception ignored) {}
+        return 0;
     }
 
     public void pause() {
@@ -321,6 +373,7 @@ public class GameView extends View {
         lastTime = 0;
         currentLevel = 1;
         spawningAllowed = true;
+        songEnded = false;
         inBreak = false;
         breakTimer = 0f;
         breakPartCompleted = 0;
@@ -330,6 +383,7 @@ public class GameView extends View {
 
         try {
             if (bgMusic != null) {
+                setMusicSpeed(SPEED_LVL1);
                 bgMusic.seekTo(0);
                 if (!bgMusic.isPlaying()) bgMusic.start();
             }
@@ -475,40 +529,59 @@ public class GameView extends View {
             screenFlashAlpha = Math.max(0f, screenFlashAlpha - dt * 2.2f);
         }
 
-        // 2. Intermission / Break between levels (3.5s break with countdown)
+        // Determine audio & tempo speed for current level
+        float levelAudioSpeed = (currentLevel == 1) ? SPEED_LVL1 : (currentLevel == 2 ? SPEED_LVL2 : SPEED_LVL3);
+
+        // Falling tile speed directly synchronized with song tempo!
+        float speed = baseSpeed * 0.95f * levelAudioSpeed;
+
+        // 2. Intermission / Break between levels (3.6s break with countdown)
         if (inBreak) {
             breakTimer -= dt;
             if (breakTimer <= 0f) {
                 inBreak = false;
                 spawningAllowed = true;
+                songEnded = false;
                 spawnDist = 0;
 
                 if (breakPartCompleted == 1) {
                     currentLevel = 2;
-                    triggerLevelTransition("SPEED UP!", "PART 2 • TURBO RUSH", CYAN);
+                    try {
+                        if (bgMusic != null) {
+                            bgMusic.seekTo(0);
+                            setMusicSpeed(SPEED_LVL2);
+                            if (!muted) bgMusic.start();
+                        }
+                    } catch (Exception ignored) {}
+                    triggerLevelTransition("SPEED UP!", "PART 2 • 1.25x TEMPO & LYRICS", CYAN);
                 } else if (breakPartCompleted == 2) {
                     currentLevel = 3;
-                    triggerLevelTransition("OVERDRIVE!", "FINAL ROUND • ZIGZAG MANIA", Color.rgb(255, 65, 95));
+                    try {
+                        if (bgMusic != null) {
+                            bgMusic.seekTo(0);
+                            setMusicSpeed(SPEED_LVL3);
+                            if (!muted) bgMusic.start();
+                        }
+                    } catch (Exception ignored) {}
+                    triggerLevelTransition("OVERDRIVE!", "FINAL ROUND • 1.45x TEMPO & ZIGZAG", Color.rgb(255, 65, 95));
                 }
-
-                try {
-                    if (bgMusic != null && !muted && !bgMusic.isPlaying()) {
-                        bgMusic.start();
-                    }
-                } catch (Exception ignored) {}
             }
             return;
         }
 
-        // 3. Level Completion check: stop spawning when score threshold is reached
-        if (currentLevel == 1 && score >= LEVEL_1_TARGET && spawningAllowed) {
-            spawningAllowed = false; // Stop spawning so player clears Part 1
-        } else if (currentLevel == 2 && score >= LEVEL_2_TARGET && spawningAllowed) {
-            spawningAllowed = false; // Stop spawning so player clears Part 2
+        // 3. Full Song Progress Check: stop spawning ~2.2s before the full song finishes
+        int songDur = getSongDuration();
+        int songPos = getSongPosition();
+        if (songDur > 5000 && spawningAllowed) {
+            int leadTimeMs = (int) (2200 / levelAudioSpeed);
+            if (songPos >= songDur - leadTimeMs || songEnded) {
+                spawningAllowed = false; // Stop spawning so player clears the remaining tiles
+            }
         }
 
-        // 4. When all remaining tiles of the round are tapped and cleared: Trigger 3.6s Break!
-        if (!spawningAllowed && tiles.isEmpty() && !inBreak) {
+        // 4. When all remaining tiles of the round are tapped and cleared, and song has completed:
+        boolean isSongDone = songEnded || (songDur > 5000 && songPos >= songDur - 350) || (!bgMusic.isPlaying() && songPos > 5000);
+        if (!spawningAllowed && tiles.isEmpty() && !inBreak && isSongDone) {
             if (currentLevel == 1) {
                 inBreak = true;
                 breakTimer = 3.6f;
@@ -531,21 +604,22 @@ public class GameView extends View {
                 } catch (Exception ignored) {}
                 playSound(tapSound);
                 return;
+            } else if (currentLevel == 3) {
+                // Round 3 finished! Restart song at Overdrive speed for endless play!
+                songEnded = false;
+                spawningAllowed = true;
+                spawnDist = 0;
+                try {
+                    if (bgMusic != null) {
+                        bgMusic.seekTo(0);
+                        setMusicSpeed(SPEED_LVL3);
+                        if (!muted) bgMusic.start();
+                    }
+                } catch (Exception ignored) {}
             }
         }
 
-        // 5. Distinct, comfortable speed per level
-        float speed;
-        if (currentLevel == 1) {
-            speed = baseSpeed * 0.96f; // Steady, comfortable normal speed
-        } else if (currentLevel == 2) {
-            speed = baseSpeed * 1.30f; // Distinct turbo speed
-        } else {
-            // Final round: Overdrive
-            speed = baseSpeed * (1.60f + Math.min(score - LEVEL_2_TARGET, 60) * 0.005f);
-        }
-
-        // 6. Update banner timer
+        // 5. Update banner timer
         if (bannerTimer > 0f) {
             bannerTimer -= dt;
             if (bannerTimer <= 0f) {
@@ -1000,7 +1074,7 @@ public class GameView extends View {
         glowText(canvas, String.valueOf(score), getWidth() / 2f, dpToPx(72f), dpToPx(40f), CYAN);
 
         // Level indicator pill badge below score
-        float badgeW = dpToPx(inBreak ? 135f : (currentLevel == 3 ? 140f : 100f));
+        float badgeW = dpToPx(inBreak ? 140f : (currentLevel == 3 ? 160f : 125f));
         float badgeH = dpToPx(20f);
         float badgeY = dpToPx(86f);
         rectInner.set(getWidth() / 2f - badgeW / 2f, badgeY, getWidth() / 2f + badgeW / 2f, badgeY + badgeH);
@@ -1012,13 +1086,13 @@ public class GameView extends View {
             lvlText = (breakPartCompleted == 1) ? "PART 1 CLEAR ☕" : "PART 2 CLEAR ☕";
         } else if (currentLevel == 1) {
             lvlColor = CYAN;
-            lvlText = "LV.1 NORMAL";
+            lvlText = "PART 1 • 1.0x NORMAL";
         } else if (currentLevel == 2) {
             lvlColor = CYAN;
-            lvlText = "LV.2 RUSH ⚡";
+            lvlText = "PART 2 • 1.25x RUSH ⚡";
         } else {
             lvlColor = Color.rgb(255, 65, 95);
-            lvlText = "FINAL ROUND: OVERDRIVE 🔥";
+            lvlText = "FINAL ROUND • 1.45x OVERDRIVE 🔥";
         }
 
         fillPaint.setColor(Color.argb(45, Color.red(lvlColor), Color.green(lvlColor), Color.blue(lvlColor)));
@@ -1092,14 +1166,14 @@ public class GameView extends View {
             canvas.drawRoundRect(rectInner, dpToPx(20f), dpToPx(20f), strokePaint);
 
             // Title
-            String roundTitle = (breakPartCompleted == 1) ? "ROUND 1 COMPLETE!" : "ROUND 2 COMPLETE!";
+            String roundTitle = (breakPartCompleted == 1) ? "PART 1 COMPLETE!" : "PART 2 COMPLETE!";
             bannerTitlePaint.setColor(themeColor);
             bannerTitlePaint.setAlpha((int)(255 * breakAlpha));
             bannerTitlePaint.setTextSize(dpToPx(23f));
             canvas.drawText(roundTitle, getWidth() / 2f, cardY - dpToPx(34f), bannerTitlePaint);
 
             // Subtitle
-            String nextMode = (breakPartCompleted == 1) ? "TAKE A BREATH • GET READY TO SPEED UP" : "TAKE A BREATH • FINAL ROUND AHEAD";
+            String nextMode = (breakPartCompleted == 1) ? "FULL SONG CLEARED • SPEEDING UP NEXT" : "1.25x SONG CLEARED • FINAL ROUND AHEAD";
             bannerSubPaint.setColor(Color.argb((int)(220 * breakAlpha), 210, 235, 255));
             bannerSubPaint.setTextSize(dpToPx(11f));
             canvas.drawText(nextMode, getWidth() / 2f, cardY - dpToPx(12f), bannerSubPaint);

@@ -689,7 +689,7 @@ public class MainActivity extends AppCompatActivity {
             startMenuMusic();
             return;
         }
-        mediaPlayer.setLooping(true);
+        mediaPlayer.setLooping(false);
         applyMuteState();
 
         gameView = new GameView(this, mediaPlayer);
