@@ -81,6 +81,7 @@ public class GameView extends View {
     private final Paint bannerTitlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bannerGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bannerSubPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint countdownPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint flashPaint = new Paint();
 
     private final RectF rect = new RectF();
@@ -111,12 +112,13 @@ public class GameView extends View {
     private boolean gameOver = false;
     private Tile missedTile = null;
 
-    // Levels & transitions (Full Song Rounds with Accelerated Lyrics/Vocals)
+    // Levels & transitions (1.2-Min Rounds with Accelerated Lyrics/Vocals)
     public static final float SPEED_LVL1 = 1.0f;
-    public static final float SPEED_LVL2 = 1.25f;
-    public static final float SPEED_LVL3 = 1.45f;
+    public static final float SPEED_LVL2 = 1.30f;
+    public static final float SPEED_LVL3 = 1.55f;
+    public static final int ROUND_DURATION_MS = 72_000; // 1.2 minutes (72 seconds)
 
-    private int currentLevel = 1; // 1 = Normal (1.0x), 2 = Rush (1.25x), 3 = Hard (1.45x + Zigzag)
+    private int currentLevel = 1; // 1 = Normal (1.0x), 2 = Rush (1.30x), 3 = Hard (1.55x + Zigzag)
     private boolean spawningAllowed = true;
     private boolean songEnded = false;
     private boolean inBreak = false;
@@ -193,6 +195,9 @@ public class GameView extends View {
         bannerSubPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         bannerSubPaint.setLetterSpacing(0.14f);
 
+        countdownPaint.setTextAlign(Paint.Align.CENTER);
+        countdownPaint.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+
         flashPaint.setStyle(Paint.Style.FILL);
         overlayPaint.setColor(Color.argb(215, 8, 6, 28));
 
@@ -265,7 +270,7 @@ public class GameView extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         laneWidth = w / (float) LANES;
         tileHeight = h / 4f;
-        baseSpeed = h * 0.58f;
+        baseSpeed = h * 0.68f;
 
         bgPaint.setShader(new LinearGradient(0, 0, 0, h,
                 Color.rgb(10, 10, 34), Color.rgb(56, 18, 112), Shader.TileMode.CLAMP));
@@ -533,7 +538,7 @@ public class GameView extends View {
         float levelAudioSpeed = (currentLevel == 1) ? SPEED_LVL1 : (currentLevel == 2 ? SPEED_LVL2 : SPEED_LVL3);
 
         // Falling tile speed directly synchronized with song tempo!
-        float speed = baseSpeed * 0.95f * levelAudioSpeed;
+        float speed = baseSpeed * levelAudioSpeed;
 
         // 2. Intermission / Break between levels (3.6s break with countdown)
         if (inBreak) {
@@ -553,7 +558,7 @@ public class GameView extends View {
                             if (!muted) bgMusic.start();
                         }
                     } catch (Exception ignored) {}
-                    triggerLevelTransition("SPEED UP!", "LEVEL 2 • 1.25x TEMPO & LYRICS", CYAN);
+                    triggerLevelTransition("SPEED UP!", "LEVEL 2 • 1.30x TEMPO & LYRICS", CYAN);
                 } else if (breakPartCompleted == 2) {
                     currentLevel = 3;
                     try {
@@ -563,18 +568,18 @@ public class GameView extends View {
                             if (!muted) bgMusic.start();
                         }
                     } catch (Exception ignored) {}
-                    triggerLevelTransition("OVERDRIVE!", "LEVEL 3 • 1.45x TEMPO & ZIGZAG", Color.rgb(255, 65, 95));
+                    triggerLevelTransition("OVERDRIVE!", "LEVEL 3 • 1.55x TEMPO & ZIGZAG", Color.rgb(255, 65, 95));
                 }
             }
             return;
         }
 
-        // 3. Round Duration Check (2-Minute Cap or Song Completion):
-        // Each round plays for up to 2 minutes (120,000 ms), or until song finishes if shorter.
+        // 3. Round Duration Check (1.2-Minute Cap or Song Completion):
+        // Each round plays for up to 1.2 minutes (72,000 ms), or until song finishes if shorter.
         // Stop spawning ~2.2s before the threshold so player clears remaining falling tiles.
         int songDur = getSongDuration();
         int songPos = getSongPosition();
-        int targetRoundDuration = (songDur > 5000) ? Math.min(songDur, 120_000) : 120_000;
+        int targetRoundDuration = (songDur > 5000) ? Math.min(songDur, ROUND_DURATION_MS) : ROUND_DURATION_MS;
         if (spawningAllowed) {
             int leadTimeMs = (int) (2200 / levelAudioSpeed);
             if (songPos >= targetRoundDuration - leadTimeMs || songEnded) {
@@ -582,7 +587,7 @@ public class GameView extends View {
             }
         }
 
-        // 4. When all remaining tiles of the round are tapped and cleared, and 2 minutes or song completed:
+        // 4. When all remaining tiles of the round are tapped and cleared, and 1.2 minutes or song completed:
         boolean isRoundDone = songEnded || (songPos >= targetRoundDuration - 350)
                 || (songDur > 5000 && songPos >= songDur - 350)
                 || (bgMusic != null && !bgMusic.isPlaying() && songPos > 5000);
@@ -979,11 +984,15 @@ public class GameView extends View {
     }
 
     private void glowText(Canvas canvas, String text, float x, float y, float size, int color) {
-        textPaint.setTextSize(size);
         glowPaint.setTextSize(size);
         glowPaint.setColor(color);
+        glowPaint.setAlpha(220);
         glowPaint.setMaskFilter(new BlurMaskFilter(size * 0.35f, BlurMaskFilter.Blur.NORMAL));
         canvas.drawText(text, x, y, glowPaint);
+
+        textPaint.setColor(Color.WHITE);
+        textPaint.setAlpha(255);
+        textPaint.setTextSize(size);
         canvas.drawText(text, x, y, textPaint);
     }
 
@@ -1179,10 +1188,10 @@ public class GameView extends View {
             String countText = (breakTimer < 0.6f) ? "GO!" : String.valueOf(sec);
             int countColor = (breakTimer < 0.6f) ? Color.rgb(0, 255, 180) : Color.WHITE;
 
-            textPaint.setColor(countColor);
-            textPaint.setAlpha((int)(255 * breakAlpha));
-            textPaint.setTextSize(dpToPx(38f));
-            canvas.drawText(countText, getWidth() / 2f, cardY + dpToPx(32f), textPaint);
+            countdownPaint.setColor(countColor);
+            countdownPaint.setAlpha((int)(255 * breakAlpha));
+            countdownPaint.setTextSize(dpToPx(38f));
+            canvas.drawText(countText, getWidth() / 2f, cardY + dpToPx(32f), countdownPaint);
 
             // Countdown Progress Bar
             float barW = cardW * 0.72f;
