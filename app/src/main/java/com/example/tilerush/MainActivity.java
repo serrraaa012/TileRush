@@ -820,9 +820,24 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams stP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         stP.topMargin = dpToPx(12);
-        stP.bottomMargin = dpToPx(32);
+        stP.bottomMargin = dpToPx(24);
         stP.gravity = Gravity.CENTER_HORIZONTAL;
         gameOverCard.addView(statusText, stP);
+
+        TextView reloadStatus = new TextView(this);
+        reloadStatus.setText("⟳   RELOADING...");
+        reloadStatus.setTextColor(Color.rgb(255, 195, 45));
+        reloadStatus.setTextSize(12f);
+        reloadStatus.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+        reloadStatus.setLetterSpacing(0.14f);
+        reloadStatus.setGravity(Gravity.CENTER);
+        reloadStatus.setVisibility(View.GONE);
+        LinearLayout.LayoutParams reloadP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        reloadP.gravity = Gravity.CENTER_HORIZONTAL;
+        reloadP.topMargin = dpToPx(6);
+        reloadP.bottomMargin = dpToPx(6);
+        gameOverCard.addView(reloadStatus, reloadP);
 
         LinearLayout buttonRow = new LinearLayout(this);
         buttonRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -841,6 +856,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams rowP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         rowP.gravity = Gravity.CENTER_HORIZONTAL;
+        rowP.topMargin = dpToPx(8);
         gameOverCard.addView(buttonRow, rowP);
 
         restartBtn.setOnClickListener(v -> {
@@ -901,9 +917,25 @@ public class MainActivity extends AppCompatActivity {
                     badgeBg.setCornerRadius(dpToPx(16));
                     statusText.setBackground(badgeBg);
 
+                    // Pause to reload the restart & menu buttons!
+                    buttonRow.setVisibility(View.GONE);
+                    buttonRow.setAlpha(0f);
+                    buttonRow.setTranslationY(dpToPx(12));
+                    reloadStatus.setVisibility(View.VISIBLE);
+                    pulse(reloadStatus);
+
                     gameOverCard.setVisibility(View.VISIBLE);
                     gameOverCard.bringToFront();
                     fadeIn(gameOverCard, 0);
+
+                    // Take a 1.4s pause before buttons reload and smoothly fade in
+                    gameFrame.postDelayed(() -> {
+                        if (gameView != null && gameView.isGameOver()) {
+                            reloadStatus.setVisibility(View.GONE);
+                            buttonRow.setVisibility(View.VISIBLE);
+                            buttonRow.animate().alpha(1f).translationY(0f).setDuration(380).start();
+                        }
+                    }, 1400);
                 });
             }
 
@@ -920,6 +952,8 @@ public class MainActivity extends AppCompatActivity {
                     pauseBtn.setBackground(gd);
                 }
                 if (pauseOverlay != null) pauseOverlay.setVisibility(View.GONE);
+                reloadStatus.setVisibility(View.GONE);
+                buttonRow.setVisibility(View.GONE);
                 stopMenuMusic();
                 gameFrame.post(() -> gameOverCard.setVisibility(View.GONE));
             }

@@ -110,7 +110,14 @@ public class GameView extends View {
     private Tile missedTile = null;
 
     // Levels & transitions
+    public static final int LEVEL_1_TARGET = 30; // Part 1 ends at score 30
+    public static final int LEVEL_2_TARGET = 65; // Part 2 ends at score 65
+
     private int currentLevel = 1; // 1 = Normal, 2 = Rush, 3 = Hard (Zigzag)
+    private boolean spawningAllowed = true;
+    private boolean inBreak = false;
+    private float breakTimer = 0f;
+    private int breakPartCompleted = 0; // 1 = Part 1 ended, 2 = Part 2 ended
     private String bannerTitle = null;
     private String bannerSub = null;
     private int bannerColor = CYAN;
@@ -313,6 +320,10 @@ public class GameView extends View {
         missedTile = null;
         lastTime = 0;
         currentLevel = 1;
+        spawningAllowed = true;
+        inBreak = false;
+        breakTimer = 0f;
+        breakPartCompleted = 0;
         bannerTitle = null;
         bannerTimer = 0f;
         screenFlashAlpha = 0f;
@@ -355,6 +366,7 @@ public class GameView extends View {
     }
 
     private void spawnTile() {
+        if (!spawningAllowed) return;
         int lane;
         boolean hold = false;
 
@@ -426,46 +438,122 @@ public class GameView extends View {
     }
 
     private void update(float dt) {
-        // Detect round / level progression
-        int newLevel;
-        if (score < 30) {
-            newLevel = 1;
-        } else if (score < 70) {
-            newLevel = 2;
-        } else {
-            newLevel = 3;
+        // 1. Visual particle/ripple updates
+        Iterator<HitRipple> ripIt = ripples.iterator();
+        while (ripIt.hasNext()) {
+            HitRipple r = ripIt.next();
+            r.radius += dt * 260f;
+            r.alpha -= dt * 3.6f;
+            if (r.alpha <= 0f || r.radius >= r.maxRadius) ripIt.remove();
         }
 
-        if (newLevel != currentLevel) {
-            if (newLevel == 2) {
-                triggerLevelTransition("SPEED UP!", "LEVEL 2 • TURBO RUSH", CYAN);
-            } else if (newLevel == 3) {
-                triggerLevelTransition("OVERDRIVE!", "HARD LEVEL • ZIGZAG MANIA", Color.rgb(255, 65, 95));
+        Iterator<HitParticle> partIt = particles.iterator();
+        while (partIt.hasNext()) {
+            HitParticle p = partIt.next();
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.vy += 320f * dt;
+            p.alpha -= dt * 2.8f;
+            if (p.alpha <= 0f) partIt.remove();
+        }
+
+        Iterator<HitPopup> popIt = popups.iterator();
+        while (popIt.hasNext()) {
+            HitPopup pop = popIt.next();
+            pop.y += pop.vy * dt;
+            pop.alpha -= dt * 2.4f;
+            if (pop.alpha <= 0f) popIt.remove();
+        }
+
+        for (int i = 0; i < LANES; i++) {
+            if (lanePress[i] > 0f) {
+                lanePress[i] = Math.max(0f, lanePress[i] - dt * 4.5f);
             }
-            currentLevel = newLevel;
         }
 
-        // Speed scaling by mode
+        if (screenFlashAlpha > 0f) {
+            screenFlashAlpha = Math.max(0f, screenFlashAlpha - dt * 2.2f);
+        }
+
+        // 2. Intermission / Break between levels (3.5s break with countdown)
+        if (inBreak) {
+            breakTimer -= dt;
+            if (breakTimer <= 0f) {
+                inBreak = false;
+                spawningAllowed = true;
+                spawnDist = 0;
+
+                if (breakPartCompleted == 1) {
+                    currentLevel = 2;
+                    triggerLevelTransition("SPEED UP!", "PART 2 • TURBO RUSH", CYAN);
+                } else if (breakPartCompleted == 2) {
+                    currentLevel = 3;
+                    triggerLevelTransition("OVERDRIVE!", "FINAL ROUND • ZIGZAG MANIA", Color.rgb(255, 65, 95));
+                }
+
+                try {
+                    if (bgMusic != null && !muted && !bgMusic.isPlaying()) {
+                        bgMusic.start();
+                    }
+                } catch (Exception ignored) {}
+            }
+            return;
+        }
+
+        // 3. Level Completion check: stop spawning when score threshold is reached
+        if (currentLevel == 1 && score >= LEVEL_1_TARGET && spawningAllowed) {
+            spawningAllowed = false; // Stop spawning so player clears Part 1
+        } else if (currentLevel == 2 && score >= LEVEL_2_TARGET && spawningAllowed) {
+            spawningAllowed = false; // Stop spawning so player clears Part 2
+        }
+
+        // 4. When all remaining tiles of the round are tapped and cleared: Trigger 3.6s Break!
+        if (!spawningAllowed && tiles.isEmpty() && !inBreak) {
+            if (currentLevel == 1) {
+                inBreak = true;
+                breakTimer = 3.6f;
+                breakPartCompleted = 1;
+                try {
+                    if (bgMusic != null && bgMusic.isPlaying()) {
+                        bgMusic.pause();
+                    }
+                } catch (Exception ignored) {}
+                playSound(tapSound);
+                return;
+            } else if (currentLevel == 2) {
+                inBreak = true;
+                breakTimer = 3.6f;
+                breakPartCompleted = 2;
+                try {
+                    if (bgMusic != null && bgMusic.isPlaying()) {
+                        bgMusic.pause();
+                    }
+                } catch (Exception ignored) {}
+                playSound(tapSound);
+                return;
+            }
+        }
+
+        // 5. Distinct, comfortable speed per level
         float speed;
         if (currentLevel == 1) {
-            speed = baseSpeed * (1f + score * 0.008f);
+            speed = baseSpeed * 0.96f; // Steady, comfortable normal speed
         } else if (currentLevel == 2) {
-            speed = baseSpeed * (1.38f + (score - 30) * 0.008f);
+            speed = baseSpeed * 1.30f; // Distinct turbo speed
         } else {
-            speed = baseSpeed * (1.75f + Math.min(score - 70, 80) * 0.006f);
+            // Final round: Overdrive
+            speed = baseSpeed * (1.60f + Math.min(score - LEVEL_2_TARGET, 60) * 0.005f);
         }
 
-        // Update banner and flash timers
+        // 6. Update banner timer
         if (bannerTimer > 0f) {
             bannerTimer -= dt;
             if (bannerTimer <= 0f) {
                 bannerTitle = null;
             }
         }
-        if (screenFlashAlpha > 0f) {
-            screenFlashAlpha = Math.max(0f, screenFlashAlpha - dt * 2.2f);
-        }
 
+        // 7. Move and update active tiles
         for (Tile t : tiles) {
             t.y += speed * dt;
             if (t.tapped && !t.isHold) {
@@ -496,6 +584,7 @@ public class GameView extends View {
             }
         }
 
+        // 8. Check for missed tiles
         for (Tile t : tiles) {
             if (!t.tapped && t.y + t.height >= getHeight()) {
                 endGame(t);
@@ -503,6 +592,7 @@ public class GameView extends View {
             }
         }
 
+        // 9. Remove dead tiles
         Iterator<Tile> it = tiles.iterator();
         while (it.hasNext()) {
             Tile t = it.next();
@@ -511,41 +601,12 @@ public class GameView extends View {
             }
         }
 
-        spawnDist += speed * dt;
-        while (spawnDist >= tileHeight) {
-            spawnDist -= tileHeight;
-            spawnTile();
-        }
-
-        Iterator<HitRipple> ripIt = ripples.iterator();
-        while (ripIt.hasNext()) {
-            HitRipple r = ripIt.next();
-            r.radius += dt * 260f;
-            r.alpha -= dt * 3.6f;
-            if (r.alpha <= 0f || r.radius >= r.maxRadius) ripIt.remove();
-        }
-
-        Iterator<HitParticle> partIt = particles.iterator();
-        while (partIt.hasNext()) {
-            HitParticle p = partIt.next();
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            p.vy += 320f * dt;
-            p.alpha -= dt * 2.8f;
-            if (p.alpha <= 0f) partIt.remove();
-        }
-
-        Iterator<HitPopup> popIt = popups.iterator();
-        while (popIt.hasNext()) {
-            HitPopup pop = popIt.next();
-            pop.y += pop.vy * dt;
-            pop.alpha -= dt * 2.4f;
-            if (pop.alpha <= 0f) popIt.remove();
-        }
-
-        for (int i = 0; i < LANES; i++) {
-            if (lanePress[i] > 0f) {
-                lanePress[i] = Math.max(0f, lanePress[i] - dt * 4.5f);
+        // 10. Spawn tiles if spawning allowed
+        if (spawningAllowed) {
+            spawnDist += speed * dt;
+            while (spawnDist >= tileHeight) {
+                spawnDist -= tileHeight;
+                spawnTile();
             }
         }
     }
@@ -939,13 +1000,26 @@ public class GameView extends View {
         glowText(canvas, String.valueOf(score), getWidth() / 2f, dpToPx(72f), dpToPx(40f), CYAN);
 
         // Level indicator pill badge below score
-        float badgeW = dpToPx(98f);
+        float badgeW = dpToPx(inBreak ? 135f : (currentLevel == 3 ? 140f : 100f));
         float badgeH = dpToPx(20f);
         float badgeY = dpToPx(86f);
         rectInner.set(getWidth() / 2f - badgeW / 2f, badgeY, getWidth() / 2f + badgeW / 2f, badgeY + badgeH);
 
-        int lvlColor = (currentLevel == 1) ? CYAN : (currentLevel == 2 ? AMBER : Color.rgb(255, 65, 95));
-        String lvlText = (currentLevel == 1) ? "LV.1 NORMAL" : (currentLevel == 2 ? "LV.2 RUSH ⚡" : "LV.3 HARD 🔥");
+        int lvlColor;
+        String lvlText;
+        if (inBreak) {
+            lvlColor = AMBER;
+            lvlText = (breakPartCompleted == 1) ? "PART 1 CLEAR ☕" : "PART 2 CLEAR ☕";
+        } else if (currentLevel == 1) {
+            lvlColor = CYAN;
+            lvlText = "LV.1 NORMAL";
+        } else if (currentLevel == 2) {
+            lvlColor = CYAN;
+            lvlText = "LV.2 RUSH ⚡";
+        } else {
+            lvlColor = Color.rgb(255, 65, 95);
+            lvlText = "FINAL ROUND: OVERDRIVE 🔥";
+        }
 
         fillPaint.setColor(Color.argb(45, Color.red(lvlColor), Color.green(lvlColor), Color.blue(lvlColor)));
         canvas.drawRoundRect(rectInner, dpToPx(10f), dpToPx(10f), fillPaint);
@@ -996,6 +1070,68 @@ public class GameView extends View {
             canvas.drawText(bannerSub, getWidth() / 2f, bannerY + dpToPx(24f), bannerSubPaint);
         }
 
+        // 10b. Break / Intermission Card Between Levels (3-4 Second Rest)
+        if (inBreak && breakTimer > 0f) {
+            float breakAlpha = Math.min(1f, breakTimer > 3.2f ? (3.6f - breakTimer) / 0.4f : (breakTimer < 0.4f ? breakTimer / 0.4f : 1f));
+            float cardW = getWidth() * 0.86f;
+            float cardH = dpToPx(150f);
+            float cardY = getHeight() * 0.42f;
+
+            rectInner.set(getWidth() / 2f - cardW / 2f, cardY - cardH / 2f,
+                          getWidth() / 2f + cardW / 2f, cardY + cardH / 2f);
+
+            int themeColor = (breakPartCompleted == 1) ? CYAN : Color.rgb(255, 195, 45);
+
+            // Translucent glass backdrop
+            fillPaint.setColor(Color.argb((int)(215 * breakAlpha), 12, 10, 36));
+            canvas.drawRoundRect(rectInner, dpToPx(20f), dpToPx(20f), fillPaint);
+
+            strokePaint.setColor(themeColor);
+            strokePaint.setAlpha((int)(230 * breakAlpha));
+            strokePaint.setStrokeWidth(dpToPx(2.5f));
+            canvas.drawRoundRect(rectInner, dpToPx(20f), dpToPx(20f), strokePaint);
+
+            // Title
+            String roundTitle = (breakPartCompleted == 1) ? "ROUND 1 COMPLETE!" : "ROUND 2 COMPLETE!";
+            bannerTitlePaint.setColor(themeColor);
+            bannerTitlePaint.setAlpha((int)(255 * breakAlpha));
+            bannerTitlePaint.setTextSize(dpToPx(23f));
+            canvas.drawText(roundTitle, getWidth() / 2f, cardY - dpToPx(34f), bannerTitlePaint);
+
+            // Subtitle
+            String nextMode = (breakPartCompleted == 1) ? "TAKE A BREATH • GET READY TO SPEED UP" : "TAKE A BREATH • FINAL ROUND AHEAD";
+            bannerSubPaint.setColor(Color.argb((int)(220 * breakAlpha), 210, 235, 255));
+            bannerSubPaint.setTextSize(dpToPx(11f));
+            canvas.drawText(nextMode, getWidth() / 2f, cardY - dpToPx(12f), bannerSubPaint);
+
+            // Large Animated Countdown
+            int sec = Math.max(1, (int) Math.ceil(breakTimer));
+            String countText = (breakTimer < 0.6f) ? "GO!" : String.valueOf(sec);
+            int countColor = (breakTimer < 0.6f) ? Color.rgb(0, 255, 180) : Color.WHITE;
+
+            textPaint.setColor(countColor);
+            textPaint.setAlpha((int)(255 * breakAlpha));
+            textPaint.setTextSize(dpToPx(38f));
+            canvas.drawText(countText, getWidth() / 2f, cardY + dpToPx(32f), textPaint);
+
+            // Countdown Progress Bar
+            float barW = cardW * 0.72f;
+            float barH = dpToPx(5f);
+            float barY = cardY + dpToPx(50f);
+            float progress = Math.max(0f, Math.min(1f, breakTimer / 3.6f));
+
+            rect.set(getWidth() / 2f - barW / 2f, barY - barH / 2f,
+                     getWidth() / 2f + barW / 2f, barY + barH / 2f);
+            fillPaint.setColor(Color.argb((int)(60 * breakAlpha), 255, 255, 255));
+            canvas.drawRoundRect(rect, barH, barH, fillPaint);
+
+            rect.set(getWidth() / 2f - barW / 2f, barY - barH / 2f,
+                     getWidth() / 2f - barW / 2f + barW * progress, barY + barH / 2f);
+            fillPaint.setColor(themeColor);
+            fillPaint.setAlpha((int)(240 * breakAlpha));
+            canvas.drawRoundRect(rect, barH, barH, fillPaint);
+        }
+
         if (gameOver) {
             canvas.drawRect(0, 0, getWidth(), getHeight(), overlayPaint);
         }
@@ -1005,7 +1141,7 @@ public class GameView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
-        if (gameOver || !running) return true;
+        if (gameOver || !running || inBreak) return true;
 
         int action = e.getActionMasked();
         int idx = e.getActionIndex();
